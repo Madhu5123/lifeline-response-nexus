@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { 
   Dialog,
@@ -18,6 +18,45 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import ImageUploader from "@/components/ImageUploader";
+import { uploadImageToCloudinary } from "@/lib/cloudinary";
+
+interface RoleImages {
+  [key: string]: File | null;
+}
+
+const ROLE_FIELDS: {
+  [key in UserRole]?: {
+    images: Array<{
+      id: string;
+      label: string;
+    }>;
+    extraFields: boolean;
+  };
+} = {
+  'ambulance': {
+    images: [
+      { id: 'driverLicense', label: 'Driving License' },
+      { id: 'ambulancePhoto', label: 'Ambulance Photo' },
+      { id: 'driverWithAmbulance', label: 'Photo of Driver with Ambulance' }
+    ],
+    extraFields: true
+  },
+  'hospital': {
+    images: [
+      { id: 'idCard', label: 'Hospital ID Card' },
+      { id: 'staffUniform', label: 'Photo in Hospital Uniform' }
+    ],
+    extraFields: true
+  },
+  'police': {
+    images: [
+      { id: 'policeId', label: 'Police ID Card' },
+      { id: 'policeUniform', label: 'Selfie in Police Uniform' }
+    ],
+    extraFields: true
+  }
+};
 
 const Register: React.FC = () => {
   const [name, setName] = useState("");
@@ -31,6 +70,10 @@ const Register: React.FC = () => {
   const [address, setAddress] = useState("");
   const [position, setPosition] = useState("");
   
+  const [roleImages, setRoleImages] = useState<RoleImages>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showDialog, setShowDialog] = useState(false);
@@ -38,6 +81,61 @@ const Register: React.FC = () => {
   const { register } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const handleImageChange = (id: string, file: File | null) => {
+    setRoleImages(prev => ({
+      ...prev,
+      [id]: file
+    }));
+  };
+
+  const validateImages = () => {
+    if (!role || !ROLE_FIELDS[role as UserRole]) return true;
+    
+    const requiredImages = ROLE_FIELDS[role as UserRole]?.images || [];
+    
+    for (const image of requiredImages) {
+      if (!roleImages[image.id]) {
+        setError(`Please upload your ${image.label}`);
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  const uploadImages = async () => {
+    if (!role || !ROLE_FIELDS[role as UserRole]) return {};
+    
+    const imageUrls: Record<string, string> = {};
+    const imagesToUpload = Object.entries(roleImages).filter(([_, file]) => !!file);
+    
+    if (imagesToUpload.length === 0) return imageUrls;
+    
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      let completed = 0;
+      
+      for (const [id, file] of imagesToUpload) {
+        if (!file) continue;
+        
+        const result = await uploadImageToCloudinary(file);
+        imageUrls[id] = result.secure_url;
+        
+        completed++;
+        setUploadProgress(Math.round((completed / imagesToUpload.length) * 100));
+      }
+      
+      return imageUrls;
+    } catch (error) {
+      console.error("Error uploading images:", error);
+      throw new Error("Failed to upload images. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,9 +153,18 @@ const Register: React.FC = () => {
       return;
     }
     
+    // Validate required images
+    if (!validateImages()) {
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
+      // Upload images first
+      const imageUrls = await uploadImages();
+      
+      // Register user with image URLs
       await register({
         name,
         email,
@@ -69,6 +176,7 @@ const Register: React.FC = () => {
           address,
           phone,
           position,
+          imageUrls: imageUrls
         }
       });
       
@@ -85,6 +193,79 @@ const Register: React.FC = () => {
   const handleCloseDialog = () => {
     setShowDialog(false);
     navigate("/login");
+  };
+
+  const renderRoleSpecificFields = () => {
+    if (!role) return null;
+    
+    const roleConfig = ROLE_FIELDS[role as UserRole];
+    if (!roleConfig) return null;
+    
+    return (
+      <>
+        {role === "ambulance" && (
+          <div className="space-y-2">
+            <Label htmlFor="licenseNumber">Driver License Number</Label>
+            <Input
+              id="licenseNumber"
+              placeholder="Enter your license number"
+              value={licenseNumber}
+              onChange={(e) => setLicenseNumber(e.target.value)}
+              required
+            />
+          </div>
+        )}
+        
+        {role === "hospital" && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="position">Position</Label>
+              <Input
+                id="position"
+                placeholder="Enter your position"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="address">Hospital Address</Label>
+              <Textarea
+                id="address"
+                placeholder="Enter hospital address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                required
+              />
+            </div>
+          </>
+        )}
+        
+        {role === "police" && (
+          <div className="space-y-2">
+            <Label htmlFor="position">Position / Badge Number</Label>
+            <Input
+              id="position"
+              placeholder="Enter your position or badge number"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              required
+            />
+          </div>
+        )}
+        
+        {/* Image upload fields */}
+        {roleConfig.images.map((image) => (
+          <ImageUploader
+            key={image.id}
+            label={image.label}
+            onChange={(file) => handleImageChange(image.id, file)}
+            required
+          />
+        ))}
+      </>
+    );
   };
 
   return (
@@ -162,7 +343,10 @@ const Register: React.FC = () => {
                 <Label htmlFor="role">Role</Label>
                 <Select 
                   value={role} 
-                  onValueChange={(value) => setRole(value as UserRole)}
+                  onValueChange={(value) => {
+                    setRole(value as UserRole);
+                    setRoleImages({});
+                  }}
                   required
                 >
                   <SelectTrigger className="w-full">
@@ -198,56 +382,34 @@ const Register: React.FC = () => {
                 />
               </div>
               
-              {role === "ambulance" && (
+              {renderRoleSpecificFields()}
+              
+              {isUploading && (
                 <div className="space-y-2">
-                  <Label htmlFor="licenseNumber">Driver License Number</Label>
-                  <Input
-                    id="licenseNumber"
-                    placeholder="Enter your license number"
-                    value={licenseNumber}
-                    onChange={(e) => setLicenseNumber(e.target.value)}
-                  />
+                  <div className="flex justify-between text-sm">
+                    <span>Uploading images...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
                 </div>
               )}
               
-              {role === "hospital" && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="position">Position</Label>
-                    <Input
-                      id="position"
-                      placeholder="Enter your position"
-                      value={position}
-                      onChange={(e) => setPosition(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Hospital Address</Label>
-                    <Textarea
-                      id="address"
-                      placeholder="Enter hospital address"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
-              
-              {role === "police" && (
-                <div className="space-y-2">
-                  <Label htmlFor="position">Position / Badge Number</Label>
-                  <Input
-                    id="position"
-                    placeholder="Enter your position or badge number"
-                    value={position}
-                    onChange={(e) => setPosition(e.target.value)}
-                  />
-                </div>
-              )}
-              
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Registering..." : "Register"}
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isLoading || isUploading}
+              >
+                {(isLoading || isUploading) ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isUploading ? "Uploading..." : "Registering..."}
+                  </>
+                ) : "Register"}
               </Button>
             </div>
           </form>

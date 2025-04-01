@@ -34,6 +34,7 @@ export interface User {
     phone?: string;
     licenseNumber?: string;
     position?: string;
+    imageUrls?: Record<string, string>;
     [key: string]: any;
   };
 }
