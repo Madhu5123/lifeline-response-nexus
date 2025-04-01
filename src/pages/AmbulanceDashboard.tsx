@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,56 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, MapPin, Phone } from "lucide-react";
-
-// Mock hospital for demo
-interface Hospital {
-  id: string;
-  name: string;
-  address: string;
-  contact: string;
-  distance: string;
-  beds: number;
-}
-
-const mockHospitals: Hospital[] = [
-  {
-    id: "hosp-1",
-    name: "General City Hospital",
-    address: "123 Medical Center Blvd, City Center",
-    contact: "555-987-6543",
-    distance: "2.3 miles",
-    beds: 12,
-  },
-  {
-    id: "hosp-2",
-    name: "County Memorial Hospital",
-    address: "456 Healthcare Ave, North Side",
-    contact: "555-456-7890",
-    distance: "4.1 miles",
-    beds: 8,
-  },
-  {
-    id: "hosp-3",
-    name: "Riverside Medical Center",
-    address: "789 Riverside Dr, East District",
-    contact: "555-321-9876",
-    distance: "5.8 miles",
-    beds: 15,
-  },
-];
-
-// Patient emergency case interface
-interface PatientCase {
-  id: string;
-  patientName: string;
-  age: number;
-  gender: string;
-  symptoms: string;
-  severity: "critical" | "serious" | "stable";
-  status: "pending" | "accepted" | "en-route" | "arrived";
-  acceptedHospital?: Hospital;
-  createdAt: Date;
-}
+import { useAuth } from "@/contexts/AuthContext";
+import { 
+  collection, 
+  addDoc, 
+  serverTimestamp, 
+  getDocs, 
+  query, 
+  where, 
+  doc, 
+  updateDoc, 
+  onSnapshot,
+  Timestamp
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { EmergencyCase, Hospital } from "@/models/types";
 
 const AmbulanceDashboard: React.FC = () => {
   const [patientName, setPatientName] = useState("");
@@ -68,13 +33,97 @@ const AmbulanceDashboard: React.FC = () => {
   const [symptoms, setSymptoms] = useState("");
   const [severity, setSeverity] = useState<"critical" | "serious" | "stable" | "">("");
   
-  const [activeCase, setActiveCase] = useState<PatientCase | null>(null);
+  const [activeCase, setActiveCase] = useState<EmergencyCase | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHospitals, setShowHospitals] = useState(false);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const { toast } = useToast();
+  const { user } = useAuth();
   
-  const handleSubmitCase = () => {
+  // Fetch active case for the current ambulance driver
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchActiveCase = async () => {
+      try {
+        const casesRef = collection(db, "emergencyCases");
+        const q = query(
+          casesRef, 
+          where("ambulanceId", "==", user.id),
+          where("status", "in", ["pending", "accepted", "en-route"])
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          if (!snapshot.empty) {
+            // Get the first active case
+            const caseDoc = snapshot.docs[0];
+            const caseData = caseDoc.data();
+            
+            setActiveCase({
+              id: caseDoc.id,
+              ...caseData,
+              createdAt: caseData.createdAt?.toDate() || new Date(),
+              updatedAt: caseData.updatedAt?.toDate() || new Date(),
+            } as EmergencyCase);
+            
+            if (caseData.status === "accepted" && caseData.hospitalId) {
+              setShowHospitals(false);
+            } else if (caseData.status === "pending") {
+              setShowHospitals(true);
+              fetchHospitals();
+            }
+          } else {
+            setActiveCase(null);
+            setShowHospitals(false);
+          }
+          setLoading(false);
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error fetching active case:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch active case",
+          variant: "destructive",
+        });
+        setLoading(false);
+      }
+    };
+    
+    fetchActiveCase();
+  }, [user, toast]);
+  
+  // Fetch hospitals
+  const fetchHospitals = async () => {
+    try {
+      const hospitalsRef = collection(db, "hospitals");
+      const querySnapshot = await getDocs(hospitalsRef);
+      
+      const hospitalsData: Hospital[] = [];
+      querySnapshot.forEach((doc) => {
+        hospitalsData.push({
+          id: doc.id,
+          ...doc.data(),
+        } as Hospital);
+      });
+      
+      setHospitals(hospitalsData);
+    } catch (error) {
+      console.error("Error fetching hospitals:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch nearby hospitals",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const handleSubmitCase = async () => {
+    if (!user) return;
+    
     if (!patientName || !patientAge || !patientGender || !symptoms || !severity) {
       toast({
         variant: "destructive",
@@ -86,27 +135,49 @@ const AmbulanceDashboard: React.FC = () => {
     
     setIsSubmitting(true);
     
-    // Simulate API call delay
-    setTimeout(() => {
-      const newCase: PatientCase = {
-        id: `case-${Date.now()}`,
+    try {
+      // Create new emergency case in Firestore
+      const caseRef = await addDoc(collection(db, "emergencyCases"), {
         patientName,
         age: parseInt(patientAge),
         gender: patientGender,
         symptoms,
-        severity: severity as "critical" | "serious" | "stable",
+        severity,
         status: "pending",
-        createdAt: new Date(),
-      };
+        ambulanceId: user.id,
+        ambulanceInfo: {
+          id: user.id,
+          driverName: user.name,
+          vehicleNumber: user.details?.licenseNumber || "Unknown",
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       
-      setActiveCase(newCase);
-      setShowHospitals(true);
-      setIsSubmitting(false);
+      // Create or update ambulance location
+      await addDoc(collection(db, "ambulances"), {
+        id: user.id,
+        driverName: user.name,
+        vehicleNumber: user.details?.licenseNumber || "Unknown",
+        status: "en-route",
+        severity,
+        caseId: caseRef.id,
+        location: {
+          latitude: 37.7749, // Default coordinates - in a real app, use device GPS
+          longitude: -122.4194,
+          address: "Current Location", // In a real app, reverse geocode the coordinates
+        },
+        lastUpdated: serverTimestamp(),
+      });
       
       toast({
         title: "Emergency case submitted",
         description: "Your case has been sent to nearby hospitals.",
       });
+      
+      // Fetch hospitals for selection
+      fetchHospitals();
+      setShowHospitals(true);
       
       // Reset form
       setPatientName("");
@@ -114,57 +185,137 @@ const AmbulanceDashboard: React.FC = () => {
       setPatientGender("");
       setSymptoms("");
       setSeverity("");
-    }, 1500);
+    } catch (error) {
+      console.error("Error submitting case:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit emergency case",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
-  const handleAcceptHospital = (hospital: Hospital) => {
+  const handleAcceptHospital = async (hospital: Hospital) => {
     if (!activeCase) return;
     
-    setActiveCase({
-      ...activeCase,
-      status: "accepted",
-      acceptedHospital: hospital,
-    });
-    
-    setShowHospitals(false);
-    
-    toast({
-      title: "Hospital confirmed",
-      description: `${hospital.name} has accepted the patient. Proceed to the hospital.`,
-    });
+    try {
+      // Update the case in Firestore
+      const caseRef = doc(db, "emergencyCases", activeCase.id);
+      await updateDoc(caseRef, {
+        status: "accepted",
+        hospitalId: hospital.id,
+        hospital: hospital,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowHospitals(false);
+      
+      toast({
+        title: "Hospital confirmed",
+        description: `${hospital.name} has accepted the patient. Proceed to the hospital.`,
+      });
+    } catch (error) {
+      console.error("Error accepting hospital:", error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm hospital selection",
+        variant: "destructive",
+      });
+    }
   };
   
-  const handleMarkEnRoute = () => {
+  const handleMarkEnRoute = async () => {
     if (!activeCase) return;
     
-    setActiveCase({
-      ...activeCase,
-      status: "en-route",
-    });
-    
-    toast({
-      title: "Status updated",
-      description: "You are now en route to the hospital.",
-    });
+    try {
+      // Update the case in Firestore
+      const caseRef = doc(db, "emergencyCases", activeCase.id);
+      await updateDoc(caseRef, {
+        status: "en-route",
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Update ambulance status
+      const ambulancesRef = collection(db, "ambulances");
+      const q = query(ambulancesRef, where("id", "==", user?.id));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const ambulanceDoc = snapshot.docs[0];
+        await updateDoc(doc(db, "ambulances", ambulanceDoc.id), {
+          status: "en-route",
+          lastUpdated: serverTimestamp(),
+        });
+      }
+      
+      toast({
+        title: "Status updated",
+        description: "You are now en route to the hospital.",
+      });
+    } catch (error) {
+      console.error("Error marking en-route:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update status",
+        variant: "destructive",
+      });
+    }
   };
   
-  const handleMarkArrived = () => {
+  const handleMarkArrived = async () => {
     if (!activeCase) return;
     
-    setActiveCase({
-      ...activeCase,
-      status: "arrived",
-    });
-    
-    toast({
-      title: "Arrived at hospital",
-      description: "You have arrived at the hospital with the patient.",
-    });
-    
-    // After 5 seconds, reset the active case for demo purposes
-    setTimeout(() => {
-      setActiveCase(null);
-    }, 5000);
+    try {
+      // Update the case in Firestore
+      const caseRef = doc(db, "emergencyCases", activeCase.id);
+      await updateDoc(caseRef, {
+        status: "arrived",
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Update ambulance status
+      const ambulancesRef = collection(db, "ambulances");
+      const q = query(ambulancesRef, where("id", "==", user?.id));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const ambulanceDoc = snapshot.docs[0];
+        await updateDoc(doc(db, "ambulances", ambulanceDoc.id), {
+          status: "idle",
+          caseId: null,
+          severity: null,
+          destination: null,
+          lastUpdated: serverTimestamp(),
+        });
+      }
+      
+      toast({
+        title: "Arrived at hospital",
+        description: "You have arrived at the hospital with the patient.",
+      });
+      
+      // After 5 seconds, mark the case as completed
+      setTimeout(async () => {
+        try {
+          await updateDoc(caseRef, {
+            status: "completed",
+            updatedAt: serverTimestamp(),
+          });
+          setActiveCase(null);
+        } catch (error) {
+          console.error("Error completing case:", error);
+        }
+      }, 5000);
+    } catch (error) {
+      console.error("Error marking arrived:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update status",
+        variant: "destructive",
+      });
+    }
   };
   
   const getSeverityBadgeClass = (severity: string) => {
@@ -189,7 +340,13 @@ const AmbulanceDashboard: React.FC = () => {
   return (
     <DashboardLayout title="Ambulance Dashboard" role="ambulance">
       <div className="space-y-6">
-        {!activeCase ? (
+        {loading ? (
+          <Card>
+            <CardContent className="flex items-center justify-center h-40">
+              <p>Loading...</p>
+            </CardContent>
+          </Card>
+        ) : !activeCase ? (
           <Card>
             <CardHeader>
               <CardTitle>New Emergency Case</CardTitle>
@@ -284,7 +441,7 @@ const AmbulanceDashboard: React.FC = () => {
                   <div>
                     <CardTitle>Active Emergency Case</CardTitle>
                     <CardDescription>
-                      Case #{activeCase.id.split('-')[1]}
+                      Case #{activeCase.id.substring(0, 6)}
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
@@ -314,23 +471,23 @@ const AmbulanceDashboard: React.FC = () => {
                   <p>{activeCase.symptoms}</p>
                 </div>
                 
-                {activeCase.acceptedHospital && (
+                {activeCase.hospital && (
                   <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
                     <h3 className="font-semibold text-blue-800 mb-2">Hospital Information</h3>
-                    <p className="text-blue-900 font-medium">{activeCase.acceptedHospital.name}</p>
+                    <p className="text-blue-900 font-medium">{activeCase.hospital.name}</p>
                     <div className="flex items-center text-blue-700 text-sm gap-1 mt-1">
                       <MapPin className="h-4 w-4" />
-                      <p>{activeCase.acceptedHospital.address}</p>
+                      <p>{activeCase.hospital.address}</p>
                     </div>
                     <div className="flex items-center text-blue-700 text-sm gap-1">
                       <Phone className="h-4 w-4" />
-                      <p>{activeCase.acceptedHospital.contact}</p>
+                      <p>{activeCase.hospital.contact}</p>
                     </div>
-                    <p className="text-sm text-blue-700 mt-1">Distance: {activeCase.acceptedHospital.distance}</p>
+                    <p className="text-sm text-blue-700 mt-1">Distance: {activeCase.hospital.distance}</p>
                     
                     <div className="flex items-center mt-4 space-x-3">
                       <a 
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(activeCase.acceptedHospital.address)}`} 
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(activeCase.hospital.address)}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="flex-1"
@@ -382,35 +539,41 @@ const AmbulanceDashboard: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {mockHospitals.map(hospital => (
-                    <div key={hospital.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between gap-4">
-                      <div>
-                        <h3 className="font-semibold">{hospital.name}</h3>
-                        <div className="flex items-center text-gray-600 text-sm gap-1 mt-1">
-                          <MapPin className="h-4 w-4" />
-                          <p>{hospital.address}</p>
-                        </div>
-                        <div className="flex items-center text-gray-600 text-sm gap-1">
-                          <Phone className="h-4 w-4" />
-                          <p>{hospital.contact}</p>
-                        </div>
-                        <div className="flex items-center gap-4 mt-1 text-sm">
-                          <span className="text-gray-700">Distance: {hospital.distance}</span>
-                          <span className="text-gray-700">Available Beds: {hospital.beds}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center md:items-start">
-                        <Button 
-                          variant="outline" 
-                          className="w-full md:w-auto"
-                          onClick={() => handleAcceptHospital(hospital)}
-                        >
-                          Select Hospital
-                        </Button>
-                      </div>
+                  {hospitals.length === 0 ? (
+                    <div className="text-center py-4 text-gray-500">
+                      Loading hospitals...
                     </div>
-                  ))}
+                  ) : (
+                    hospitals.map(hospital => (
+                      <div key={hospital.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between gap-4">
+                        <div>
+                          <h3 className="font-semibold">{hospital.name}</h3>
+                          <div className="flex items-center text-gray-600 text-sm gap-1 mt-1">
+                            <MapPin className="h-4 w-4" />
+                            <p>{hospital.address}</p>
+                          </div>
+                          <div className="flex items-center text-gray-600 text-sm gap-1">
+                            <Phone className="h-4 w-4" />
+                            <p>{hospital.contact}</p>
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-sm">
+                            <span className="text-gray-700">Distance: {hospital.distance}</span>
+                            <span className="text-gray-700">Available Beds: {hospital.beds}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center md:items-start">
+                          <Button 
+                            variant="outline" 
+                            className="w-full md:w-auto"
+                            onClick={() => handleAcceptHospital(hospital)}
+                          >
+                            Select Hospital
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             )}

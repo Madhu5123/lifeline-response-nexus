@@ -1,91 +1,73 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, MapPin, Phone } from "lucide-react";
-
-// Mock ambulance interface
-interface Ambulance {
-  id: string;
-  driverName: string;
-  vehicleNumber: string;
-  severity: "critical" | "serious" | "stable";
-  status: "en-route" | "idle";
-  location: {
-    latitude: number;
-    longitude: number;
-    address: string;
-  };
-  destination?: {
-    name: string;
-    address: string;
-    eta: string;
-  };
-  isNearby: boolean;
-  lastUpdated: Date;
-}
-
-// Mock active ambulances
-const mockAmbulances: Ambulance[] = [
-  {
-    id: "amb-123",
-    driverName: "John Ambulance",
-    vehicleNumber: "AMB-7890",
-    severity: "critical",
-    status: "en-route",
-    location: {
-      latitude: 37.7749,
-      longitude: -122.4194,
-      address: "Market St & 5th St, San Francisco",
-    },
-    destination: {
-      name: "General City Hospital",
-      address: "123 Medical Center Blvd, City Center",
-      eta: "4 minutes",
-    },
-    isNearby: true, // This ambulance is near the current police officer
-    lastUpdated: new Date(Date.now() - 30000), // 30 seconds ago
-  },
-  {
-    id: "amb-124",
-    driverName: "Sarah Paramedic",
-    vehicleNumber: "AMB-4567",
-    severity: "serious",
-    status: "en-route",
-    location: {
-      latitude: 37.7833,
-      longitude: -122.4167,
-      address: "Van Ness Ave & Geary Blvd, San Francisco",
-    },
-    destination: {
-      name: "County Memorial Hospital",
-      address: "456 Healthcare Ave, North Side",
-      eta: "7 minutes",
-    },
-    isNearby: false,
-    lastUpdated: new Date(Date.now() - 60000), // 1 minute ago
-  },
-  {
-    id: "amb-125",
-    driverName: "Mike Rescue",
-    vehicleNumber: "AMB-1234",
-    severity: "stable",
-    status: "idle",
-    location: {
-      latitude: 37.7694,
-      longitude: -122.4862,
-      address: "19th Ave & Irving St, San Francisco",
-    },
-    isNearby: false,
-    lastUpdated: new Date(Date.now() - 180000), // 3 minutes ago
-  },
-];
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot,
+  Timestamp
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Ambulance } from "@/models/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 const PoliceDashboard: React.FC = () => {
-  const [ambulances, setAmbulances] = useState(mockAmbulances);
+  const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  
+  // Fetch ambulances data from Firestore
+  useEffect(() => {
+    const fetchAmbulances = () => {
+      try {
+        const ambulancesRef = collection(db, "ambulances");
+        
+        // Set up real-time listener for ambulances
+        const unsubscribe = onSnapshot(ambulancesRef, (snapshot) => {
+          const ambulancesData: Ambulance[] = [];
+          
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            // In a real app, you would calculate isNearby based on the police officer's location
+            // For demo purposes, we'll randomly mark some ambulances as nearby
+            const isNearby = Math.random() > 0.7; // 30% chance of being nearby
+            
+            ambulancesData.push({
+              id: data.id,
+              driverName: data.driverName,
+              vehicleNumber: data.vehicleNumber,
+              severity: data.severity,
+              status: data.status,
+              location: data.location,
+              destination: data.destination,
+              caseId: data.caseId,
+              isNearby,
+              lastUpdated: data.lastUpdated?.toDate() || new Date(),
+            } as Ambulance);
+          });
+          
+          setAmbulances(ambulancesData);
+          setLoading(false);
+        }, (error) => {
+          console.error("Error fetching ambulances:", error);
+          setLoading(false);
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up ambulances listener:", error);
+        setLoading(false);
+      }
+    };
+    
+    fetchAmbulances();
+  }, []);
   
   const getStatusBadgeClass = (status: string) => {
     switch(status) {
@@ -200,7 +182,13 @@ const PoliceDashboard: React.FC = () => {
               </CardContent>
             </Card>
             
-            {ambulances.filter(a => a.isNearby).length > 0 && (
+            {loading ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40">
+                  <p>Loading ambulance data...</p>
+                </CardContent>
+              </Card>
+            ) : ambulances.filter(a => a.isNearby).length > 0 && (
               <Card className="border-t-4 border-t-emergency-police">
                 <CardHeader className="bg-blue-50 text-blue-800">
                   <div className="flex items-start gap-2">
@@ -217,9 +205,11 @@ const PoliceDashboard: React.FC = () => {
                           <p className="text-sm">Driver: {ambulance.driverName}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Badge className={getSeverityBadgeClass(ambulance.severity)}>
-                            {ambulance.severity.charAt(0).toUpperCase() + ambulance.severity.slice(1)}
-                          </Badge>
+                          {ambulance.severity && (
+                            <Badge className={getSeverityBadgeClass(ambulance.severity)}>
+                              {ambulance.severity.charAt(0).toUpperCase() + ambulance.severity.slice(1)}
+                            </Badge>
+                          )}
                           <Badge className={getStatusBadgeClass(ambulance.status)}>
                             {ambulance.status === "en-route" ? "En Route" : "Idle"}
                           </Badge>
@@ -252,48 +242,58 @@ const PoliceDashboard: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="list" className="space-y-4">
-            {ambulances.map(ambulance => (
-              <Card key={ambulance.id} className={`border-l-4 ${ambulance.isNearby ? "border-l-blue-500" : ""}`}>
-                <CardHeader>
-                  <div className="flex flex-wrap justify-between items-start gap-2">
-                    <div>
-                      <CardTitle>{ambulance.vehicleNumber}</CardTitle>
-                      <CardDescription>
-                        Driver: {ambulance.driverName}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      {ambulance.isNearby && (
-                        <Badge className="bg-blue-500 text-white">Nearby</Badge>
-                      )}
-                      <Badge className={getSeverityBadgeClass(ambulance.severity)}>
-                        {ambulance.severity.charAt(0).toUpperCase() + ambulance.severity.slice(1)}
-                      </Badge>
-                      <Badge className={getStatusBadgeClass(ambulance.status)}>
-                        {ambulance.status === "en-route" ? "En Route" : "Idle"}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-start gap-1 text-gray-700">
-                    <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <div>Current Location: {ambulance.location.address}</div>
-                      {ambulance.destination && (
-                        <div className="text-blue-700">
-                          Destination: {ambulance.destination.name} ({ambulance.destination.eta})
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="text-xs text-gray-500">
-                    Last updated: {formatTimestamp(ambulance.lastUpdated)}
-                  </div>
+            {loading ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40">
+                  <p>Loading ambulance data...</p>
                 </CardContent>
               </Card>
-            ))}
+            ) : (
+              ambulances.map(ambulance => (
+                <Card key={ambulance.id} className={`border-l-4 ${ambulance.isNearby ? "border-l-blue-500" : ""}`}>
+                  <CardHeader>
+                    <div className="flex flex-wrap justify-between items-start gap-2">
+                      <div>
+                        <CardTitle>{ambulance.vehicleNumber}</CardTitle>
+                        <CardDescription>
+                          Driver: {ambulance.driverName}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        {ambulance.isNearby && (
+                          <Badge className="bg-blue-500 text-white">Nearby</Badge>
+                        )}
+                        {ambulance.severity && (
+                          <Badge className={getSeverityBadgeClass(ambulance.severity)}>
+                            {ambulance.severity.charAt(0).toUpperCase() + ambulance.severity.slice(1)}
+                          </Badge>
+                        )}
+                        <Badge className={getStatusBadgeClass(ambulance.status)}>
+                          {ambulance.status === "en-route" ? "En Route" : "Idle"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-start gap-1 text-gray-700">
+                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div>Current Location: {ambulance.location.address}</div>
+                        {ambulance.destination && (
+                          <div className="text-blue-700">
+                            Destination: {ambulance.destination.name} ({ambulance.destination.eta})
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="text-xs text-gray-500">
+                      Last updated: {formatTimestamp(ambulance.lastUpdated)}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </TabsContent>
           
           <TabsContent value="alerts" className="space-y-4">
@@ -307,8 +307,8 @@ const PoliceDashboard: React.FC = () => {
               <CardContent>
                 <div className="space-y-4">
                   <div className="border-l-4 border-l-blue-500 pl-4 py-2">
-                    <p className="font-medium">Ambulance AMB-7890 is in your vicinity</p>
-                    <p className="text-sm text-gray-600">Transporting critical patient to General City Hospital</p>
+                    <p className="font-medium">Nearby ambulance alert</p>
+                    <p className="text-sm text-gray-600">An ambulance is in your vicinity</p>
                     <p className="text-xs text-gray-400">Today, 10:23 AM</p>
                   </div>
                   
@@ -319,8 +319,8 @@ const PoliceDashboard: React.FC = () => {
                   </div>
                   
                   <div className="border-l-4 border-l-blue-500 pl-4 py-2">
-                    <p className="font-medium">Ambulance AMB-4567 was in your vicinity</p>
-                    <p className="text-sm text-gray-600">Transported serious patient to County Memorial Hospital</p>
+                    <p className="font-medium">Ambulance was in your vicinity</p>
+                    <p className="text-sm text-gray-600">Ambulance transporting patient to hospital</p>
                     <p className="text-xs text-gray-400">Yesterday, 3:45 PM</p>
                   </div>
                   

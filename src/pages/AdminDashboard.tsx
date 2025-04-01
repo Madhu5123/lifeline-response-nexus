@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,58 +8,16 @@ import { Button } from "@/components/ui/button";
 import { User, UserRole } from "@/contexts/AuthContext";
 import { Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Mock user registration requests for demo purposes
-const mockPendingUsers: User[] = [
-  {
-    id: "pending-1",
-    name: "David Smith",
-    email: "david@ambulance.com",
-    role: "ambulance",
-    status: "pending",
-    details: {
-      organization: "City Ambulance Services",
-      licenseNumber: "AMB54321",
-      phone: "555-909-8765",
-    }
-  },
-  {
-    id: "pending-2",
-    name: "Jennifer Lee",
-    email: "jennifer@hospital.com",
-    role: "hospital",
-    status: "pending",
-    details: {
-      organization: "County Medical Center",
-      position: "ER Nurse",
-      address: "456 Health Blvd",
-      phone: "555-123-4567",
-    }
-  },
-  {
-    id: "pending-3",
-    name: "Carlos Rodriguez",
-    email: "carlos@police.com",
-    role: "police",
-    status: "pending",
-    details: {
-      organization: "City Police Department",
-      position: "Patrol Officer",
-      phone: "555-567-8901",
-    }
-  },
-];
-
-// User statistics for the dashboard
-const userStats = {
-  ambulance: 12,
-  hospital: 8,
-  police: 15,
-  total: 35,
-  pending: 3,
-  approved: 32,
-  rejected: 5,
-};
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  updateDoc, 
+  doc,
+  onSnapshot
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // Helper function to get badge color for role
 const getRoleBadgeClass = (role: UserRole) => {
@@ -73,27 +31,153 @@ const getRoleBadgeClass = (role: UserRole) => {
 };
 
 const AdminDashboard: React.FC = () => {
-  const [pendingUsers, setPendingUsers] = useState(mockPendingUsers);
+  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
+  const [userStats, setUserStats] = useState({
+    ambulance: 0,
+    hospital: 0,
+    police: 0,
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   
-  const handleApproveUser = (userId: string) => {
-    // In a real app, this would make an API call to update the user's status
-    setPendingUsers(pendingUsers.filter(user => user.id !== userId));
+  // Fetch all users and compute stats
+  useEffect(() => {
+    const usersRef = collection(db, "users");
     
-    toast({
-      title: "User Approved",
-      description: "The user has been approved and can now log in.",
+    // Set up real-time listener for all users to compute stats
+    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
+      let ambulanceCount = 0;
+      let hospitalCount = 0;
+      let policeCount = 0;
+      let pendingCount = 0;
+      let approvedCount = 0;
+      let rejectedCount = 0;
+      
+      snapshot.forEach((doc) => {
+        const userData = doc.data();
+        
+        // Count by role
+        if (userData.role === "ambulance") ambulanceCount++;
+        if (userData.role === "hospital") hospitalCount++;
+        if (userData.role === "police") policeCount++;
+        
+        // Count by status
+        if (userData.status === "pending") pendingCount++;
+        if (userData.status === "approved") approvedCount++;
+        if (userData.status === "rejected") rejectedCount++;
+      });
+      
+      setUserStats({
+        ambulance: ambulanceCount,
+        hospital: hospitalCount,
+        police: policeCount,
+        total: snapshot.size,
+        pending: pendingCount,
+        approved: approvedCount,
+        rejected: rejectedCount,
+      });
+      
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching users:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch user statistics",
+        variant: "destructive",
+      });
+      setLoading(false);
     });
+    
+    return () => unsubscribe();
+  }, [toast]);
+  
+  // Fetch pending users
+  useEffect(() => {
+    const fetchPendingUsers = async () => {
+      try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("status", "==", "pending"));
+        
+        // Set up real-time listener for pending users
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const users: User[] = [];
+          snapshot.forEach((doc) => {
+            users.push({
+              id: doc.id,
+              ...doc.data()
+            } as User);
+          });
+          
+          setPendingUsers(users);
+        }, (error) => {
+          console.error("Error fetching pending users:", error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch pending users",
+            variant: "destructive",
+          });
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up pending users listener:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch pending users",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    fetchPendingUsers();
+  }, [toast]);
+  
+  const handleApproveUser = async (userId: string) => {
+    try {
+      // Update user status in Firestore
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        status: "approved",
+      });
+      
+      toast({
+        title: "User Approved",
+        description: "The user has been approved and can now log in.",
+      });
+    } catch (error) {
+      console.error("Error approving user:", error);
+      toast({
+        title: "Error",
+        description: "Failed to approve user",
+        variant: "destructive",
+      });
+    }
   };
   
-  const handleRejectUser = (userId: string) => {
-    // In a real app, this would make an API call to update the user's status
-    setPendingUsers(pendingUsers.filter(user => user.id !== userId));
-    
-    toast({
-      title: "User Rejected",
-      description: "The user registration has been rejected.",
-    });
+  const handleRejectUser = async (userId: string) => {
+    try {
+      // Update user status in Firestore
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        status: "rejected",
+      });
+      
+      toast({
+        title: "User Rejected",
+        description: "The user registration has been rejected.",
+      });
+    } catch (error) {
+      console.error("Error rejecting user:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reject user",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -133,7 +217,7 @@ const AdminDashboard: React.FC = () => {
             <CardContent>
               <div className="text-2xl font-bold">{userStats.ambulance}</div>
               <p className="text-xs text-muted-foreground">
-                +2 since last month
+                Active ambulance drivers
               </p>
             </CardContent>
           </Card>
@@ -151,7 +235,7 @@ const AdminDashboard: React.FC = () => {
             <CardContent>
               <div className="text-2xl font-bold">{userStats.hospital}</div>
               <p className="text-xs text-muted-foreground">
-                +1 since last month
+                Active hospital users
               </p>
             </CardContent>
           </Card>
@@ -168,7 +252,7 @@ const AdminDashboard: React.FC = () => {
             <CardContent>
               <div className="text-2xl font-bold">{userStats.police}</div>
               <p className="text-xs text-muted-foreground">
-                +3 since last month
+                Active police officers
               </p>
             </CardContent>
           </Card>
@@ -190,7 +274,11 @@ const AdminDashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {pendingUsers.length === 0 ? (
+                {loading ? (
+                  <div className="text-center py-4">
+                    Loading pending approvals...
+                  </div>
+                ) : pendingUsers.length === 0 ? (
                   <div className="text-center py-4 text-gray-500">
                     No pending approval requests
                   </div>

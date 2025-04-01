@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,159 +7,252 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, Clock, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Case interface
-interface EmergencyCase {
-  id: string;
-  patientName: string;
-  age: number;
-  gender: string;
-  symptoms: string;
-  severity: "critical" | "serious" | "stable";
-  status: "pending" | "accepted" | "en-route" | "arrived" | "completed";
-  ambulanceInfo?: {
-    id: string;
-    driverName: string;
-    vehicleNumber: string;
-    estimatedArrival: string;
-  };
-  createdAt: Date;
-}
-
-// Mock active cases for demo
-const mockPendingCases: EmergencyCase[] = [
-  {
-    id: "case-12345",
-    patientName: "Robert Johnson",
-    age: 67,
-    gender: "male",
-    symptoms: "Chest pain, shortness of breath, left arm pain. Possible heart attack.",
-    severity: "critical",
-    status: "pending",
-    createdAt: new Date(Date.now() - 3 * 60000), // 3 minutes ago
-  },
-  {
-    id: "case-12346",
-    patientName: "Emily Davis",
-    age: 34,
-    gender: "female",
-    symptoms: "Severe abdominal pain, vomiting. Possible appendicitis.",
-    severity: "serious",
-    status: "pending",
-    createdAt: new Date(Date.now() - 5 * 60000), // 5 minutes ago
-  },
-  {
-    id: "case-12347",
-    patientName: "Thomas Wilson",
-    age: 45,
-    gender: "male",
-    symptoms: "Deep laceration on right leg, significant bleeding but controlled with pressure.",
-    severity: "stable",
-    status: "pending",
-    createdAt: new Date(Date.now() - 8 * 60000), // 8 minutes ago
-  },
-];
-
-// Mock active cases that have been accepted
-const mockActiveCases: EmergencyCase[] = [
-  {
-    id: "case-12340",
-    patientName: "Maria Garcia",
-    age: 78,
-    gender: "female",
-    symptoms: "Stroke symptoms - facial drooping, arm weakness, slurred speech.",
-    severity: "critical",
-    status: "en-route",
-    ambulanceInfo: {
-      id: "amb-123",
-      driverName: "John Ambulance",
-      vehicleNumber: "AMB-7890",
-      estimatedArrival: "2 minutes",
-    },
-    createdAt: new Date(Date.now() - 15 * 60000), // 15 minutes ago
-  },
-];
-
-// Previously completed cases
-const mockHistoryCases: EmergencyCase[] = [
-  {
-    id: "case-12330",
-    patientName: "James Smith",
-    age: 55,
-    gender: "male",
-    symptoms: "Fractured femur from bicycle accident.",
-    severity: "serious",
-    status: "completed",
-    ambulanceInfo: {
-      id: "amb-122",
-      driverName: "David Ambulance",
-      vehicleNumber: "AMB-4567",
-      estimatedArrival: "Arrived",
-    },
-    createdAt: new Date(Date.now() - 2 * 3600000), // 2 hours ago
-  },
-  {
-    id: "case-12320",
-    patientName: "Sofia Rodriguez",
-    age: 8,
-    gender: "female",
-    symptoms: "High fever, rash, irritability.",
-    severity: "stable",
-    status: "completed",
-    ambulanceInfo: {
-      id: "amb-121",
-      driverName: "John Ambulance",
-      vehicleNumber: "AMB-7890",
-      estimatedArrival: "Arrived",
-    },
-    createdAt: new Date(Date.now() - 5 * 3600000), // 5 hours ago
-  },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  updateDoc, 
+  doc, 
+  onSnapshot, 
+  serverTimestamp,
+  orderBy
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { EmergencyCase } from "@/models/types";
 
 const HospitalDashboard: React.FC = () => {
-  const [pendingCases, setPendingCases] = useState(mockPendingCases);
-  const [activeCases, setActiveCases] = useState(mockActiveCases);
-  const [historyCases, setHistoryCases] = useState(mockHistoryCases);
+  const [pendingCases, setPendingCases] = useState<EmergencyCase[]>([]);
+  const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
+  const [historyCases, setHistoryCases] = useState<EmergencyCase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    pendingCount: 0,
+    activeCount: 0,
+    availableBeds: 24, // Default value
+  });
   
   const { toast } = useToast();
+  const { user } = useAuth();
   
-  const handleAcceptCase = (caseId: string) => {
-    // Find the case
-    const caseToAccept = pendingCases.find(c => c.id === caseId);
-    if (!caseToAccept) return;
+  // Fetch pending cases
+  useEffect(() => {
+    if (!user) return;
     
-    // Remove from pending
-    setPendingCases(pendingCases.filter(c => c.id !== caseId));
+    const fetchPendingCases = () => {
+      try {
+        const casesRef = collection(db, "emergencyCases");
+        const q = query(
+          casesRef, 
+          where("status", "==", "pending"),
+          orderBy("createdAt", "desc")
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const cases: EmergencyCase[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            cases.push({
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              updatedAt: data.updatedAt?.toDate() || new Date(),
+            } as EmergencyCase);
+          });
+          
+          setPendingCases(cases);
+          setStats(prev => ({ ...prev, pendingCount: cases.length }));
+          setLoading(false);
+        }, (error) => {
+          console.error("Error fetching pending cases:", error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch pending cases",
+            variant: "destructive",
+          });
+          setLoading(false);
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up pending cases listener:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch pending cases",
+          variant: "destructive",
+        });
+        setLoading(false);
+      }
+    };
     
-    // Add to active cases with status updated
-    setActiveCases([
-      ...activeCases,
-      {
-        ...caseToAccept,
+    fetchPendingCases();
+  }, [user, toast]);
+  
+  // Fetch active cases for this hospital
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchActiveCases = () => {
+      try {
+        const casesRef = collection(db, "emergencyCases");
+        const q = query(
+          casesRef, 
+          where("hospitalId", "==", user.id),
+          where("status", "in", ["accepted", "en-route", "arrived"]),
+          orderBy("updatedAt", "desc")
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const cases: EmergencyCase[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            cases.push({
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              updatedAt: data.updatedAt?.toDate() || new Date(),
+            } as EmergencyCase);
+          });
+          
+          setActiveCases(cases);
+          setStats(prev => ({ ...prev, activeCount: cases.length }));
+        }, (error) => {
+          console.error("Error fetching active cases:", error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch active cases",
+            variant: "destructive",
+          });
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up active cases listener:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch active cases",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    fetchActiveCases();
+  }, [user, toast]);
+  
+  // Fetch case history for this hospital
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchHistoryCases = () => {
+      try {
+        const casesRef = collection(db, "emergencyCases");
+        const q = query(
+          casesRef, 
+          where("hospitalId", "==", user.id),
+          where("status", "==", "completed"),
+          orderBy("updatedAt", "desc")
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const cases: EmergencyCase[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            cases.push({
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              updatedAt: data.updatedAt?.toDate() || new Date(),
+            } as EmergencyCase);
+          });
+          
+          setHistoryCases(cases);
+        }, (error) => {
+          console.error("Error fetching history cases:", error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch case history",
+            variant: "destructive",
+          });
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up history cases listener:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch case history",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    fetchHistoryCases();
+  }, [user, toast]);
+  
+  const handleAcceptCase = async (caseId: string) => {
+    if (!user) return;
+    
+    try {
+      // Get the hospital details
+      const hospitalData = {
+        id: user.id,
+        name: user.details?.organization || "Hospital",
+        address: user.details?.address || "Hospital Address",
+        contact: user.details?.phone || "Contact Number",
+        distance: "Calculating...", // In a real app, calculate from coordinates
+        beds: stats.availableBeds,
+      };
+      
+      // Update the case in Firestore
+      const caseRef = doc(db, "emergencyCases", caseId);
+      await updateDoc(caseRef, {
         status: "accepted",
-        ambulanceInfo: {
-          id: "amb-123",
-          driverName: "John Ambulance",
-          vehicleNumber: "AMB-7890",
-          estimatedArrival: "12 minutes",
-        },
-      },
-    ]);
-    
-    toast({
-      title: "Case Accepted",
-      description: `You have accepted case ${caseId} and ambulance has been notified.`,
-    });
+        hospitalId: user.id,
+        hospital: hospitalData,
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Update available beds
+      setStats(prev => ({
+        ...prev,
+        availableBeds: prev.availableBeds - 1
+      }));
+      
+      toast({
+        title: "Case Accepted",
+        description: `You have accepted the emergency case. The ambulance has been notified.`,
+      });
+    } catch (error) {
+      console.error("Error accepting case:", error);
+      toast({
+        title: "Error",
+        description: "Failed to accept the case",
+        variant: "destructive",
+      });
+    }
   };
   
-  const handleRejectCase = (caseId: string) => {
-    // Remove from pending cases
-    setPendingCases(pendingCases.filter(c => c.id !== caseId));
-    
-    toast({
-      title: "Case Rejected",
-      description: `You have rejected case ${caseId}. Other hospitals will be notified.`,
-    });
+  const handleRejectCase = async (caseId: string) => {
+    try {
+      // In a real app, you might want to record the rejection reason
+      // For now, we'll just remove this hospital from consideration
+      
+      toast({
+        title: "Case Rejected",
+        description: `You have rejected the case. Other hospitals will be notified.`,
+      });
+      
+      // Remove this case from the pending list in the UI
+      setPendingCases(pendingCases.filter(c => c.id !== caseId));
+    } catch (error) {
+      console.error("Error rejecting case:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reject the case",
+        variant: "destructive",
+      });
+    }
   };
   
   const getSeverityBadgeClass = (severity: string) => {
@@ -202,7 +295,7 @@ const HospitalDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {pendingCases.length}
+                {stats.pendingCount}
               </CardTitle>
               <CardDescription>Pending Requests</CardDescription>
             </CardHeader>
@@ -217,7 +310,7 @@ const HospitalDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {activeCases.length}
+                {stats.activeCount}
               </CardTitle>
               <CardDescription>Active Cases</CardDescription>
             </CardHeader>
@@ -231,7 +324,7 @@ const HospitalDashboard: React.FC = () => {
           
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-2xl font-bold">24</CardTitle>
+              <CardTitle className="text-2xl font-bold">{stats.availableBeds}</CardTitle>
               <CardDescription>Available Beds</CardDescription>
             </CardHeader>
             <CardContent>
@@ -251,7 +344,13 @@ const HospitalDashboard: React.FC = () => {
           </TabsList>
           
           <TabsContent value="pending" className="space-y-4">
-            {pendingCases.length === 0 ? (
+            {loading ? (
+              <Card>
+                <CardContent className="pt-6 text-center">
+                  Loading pending emergency requests...
+                </CardContent>
+              </Card>
+            ) : pendingCases.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-center text-gray-500">
                   No pending emergency requests
@@ -265,7 +364,7 @@ const HospitalDashboard: React.FC = () => {
                       <div>
                         <CardTitle>{emergency.patientName}</CardTitle>
                         <CardDescription>
-                          Case #{emergency.id.split('-')[1]} • {formatTimestamp(emergency.createdAt)}
+                          Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
@@ -338,7 +437,7 @@ const HospitalDashboard: React.FC = () => {
                       <div>
                         <CardTitle>{emergency.patientName}</CardTitle>
                         <CardDescription>
-                          Case #{emergency.id.split('-')[1]} • {formatTimestamp(emergency.createdAt)}
+                          Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
@@ -383,7 +482,7 @@ const HospitalDashboard: React.FC = () => {
                         </div>
                         <div className="mt-2">
                           <p className="text-xs text-blue-700">ETA</p>
-                          <p className="text-sm font-medium">{emergency.ambulanceInfo.estimatedArrival}</p>
+                          <p className="text-sm font-medium">{emergency.ambulanceInfo.estimatedArrival || "Calculating..."}</p>
                         </div>
                       </div>
                     )}
@@ -402,50 +501,58 @@ const HospitalDashboard: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="history" className="space-y-4">
-            {historyCases.map(emergency => (
-              <Card key={emergency.id} className="border-l-4 border-l-gray-400">
-                <CardHeader>
-                  <div className="flex flex-wrap justify-between items-start gap-2">
-                    <div>
-                      <CardTitle>{emergency.patientName}</CardTitle>
-                      <CardDescription>
-                        Case #{emergency.id.split('-')[1]} • {formatTimestamp(emergency.createdAt)}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge className={getSeverityBadgeClass(emergency.severity)}>
-                        {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
-                      </Badge>
-                      <Badge className={getStatusBadgeClass(emergency.status)}>
-                        Completed
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Patient</p>
-                      <p className="font-medium">{emergency.patientName}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Age/Gender</p>
-                      <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm text-gray-500">Symptoms/Condition</p>
-                    <p>{emergency.symptoms}</p>
-                  </div>
+            {historyCases.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 text-center text-gray-500">
+                  No case history available
                 </CardContent>
-                <CardFooter className="flex justify-end space-x-2 border-t p-4">
-                  <Button variant="outline">
-                    View Full Case Details
-                  </Button>
-                </CardFooter>
               </Card>
-            ))}
+            ) : (
+              historyCases.map(emergency => (
+                <Card key={emergency.id} className="border-l-4 border-l-gray-400">
+                  <CardHeader>
+                    <div className="flex flex-wrap justify-between items-start gap-2">
+                      <div>
+                        <CardTitle>{emergency.patientName}</CardTitle>
+                        <CardDescription>
+                          Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge className={getSeverityBadgeClass(emergency.severity)}>
+                          {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
+                        </Badge>
+                        <Badge className={getStatusBadgeClass(emergency.status)}>
+                          Completed
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Patient</p>
+                        <p className="font-medium">{emergency.patientName}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Age/Gender</p>
+                        <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm text-gray-500">Symptoms/Condition</p>
+                      <p>{emergency.symptoms}</p>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-end space-x-2 border-t p-4">
+                    <Button variant="outline">
+                      View Full Case Details
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))
+            )}
           </TabsContent>
         </Tabs>
       </div>
