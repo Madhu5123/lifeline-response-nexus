@@ -103,7 +103,7 @@ const Login: React.FC = () => {
               
               <div className="text-sm text-center text-gray-500">
                 Demo credentials:<br />
-                Admin: admin@lifeline.com / password<br />
+                Admin: admin@lifeline.com / adminlifeline<br />
                 Ambulance: john@ambulance.com / password<br />
                 Hospital: sarah@hospital.com / password<br />
                 Police: mike@police.com / password

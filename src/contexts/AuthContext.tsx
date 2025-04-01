@@ -50,6 +50,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Admin hard-coded credentials
+const ADMIN_EMAIL = "admin@lifeline.com";
+const ADMIN_PASSWORD = "adminlifeline";
+const ADMIN_USER: User = {
+  id: "admin-user-id",
+  name: "Admin User",
+  email: ADMIN_EMAIL,
+  role: "admin",
+  status: "approved"
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -121,9 +132,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
-      // Sign in with Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // Check if admin credentials
+      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        // Set admin user directly without Firebase Auth
+        setUser(ADMIN_USER);
+        toast({
+          title: "Admin Login successful",
+          description: "Welcome to Lifeline Emergency Response",
+        });
+        setIsLoading(false);
+        return;
+      }
       
+      // For non-admin users, proceed with Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       // User data will be set by the onAuthStateChanged listener
       
     } catch (error: any) {
@@ -197,6 +219,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      // Check if admin user
+      if (user?.email === ADMIN_EMAIL) {
+        // Simply clear the user state
+        setUser(null);
+        return;
+      }
+      
+      // For non-admin users, sign out from Firebase
       await signOut(auth);
       // The onAuthStateChanged listener will set the user to null
     } catch (error) {
