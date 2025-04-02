@@ -1,13 +1,13 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Mail, Lock, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -20,7 +20,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   
   // Redirect if already logged in
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated && user) {
       // Redirect based on role
       if (user.role === "admin") navigate("/admin");
@@ -50,80 +50,125 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Lifeline Response
-          </CardTitle>
-          <CardDescription className="text-center">
-            Enter your credentials to access your account
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent>
-          {error && (
-            <div className="bg-red-50 text-red-700 p-3 rounded-md mb-4 flex items-start">
-              <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-          
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
-              </Button>
-              
-              <div className="text-sm text-center text-gray-500">
-                Demo credentials:<br />
-                Admin: admin@lifeline.com / adminlifeline<br />
-                Ambulance: john@ambulance.com / password<br />
-                Hospital: sarah@hospital.com / password<br />
-                Police: mike@police.com / password
-              </div>
-            </div>
-          </form>
-        </CardContent>
-        
-        <CardFooter className="flex flex-col space-y-4">
-          <div className="text-sm text-center text-gray-500">
-            Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="font-medium text-blue-600 hover:text-blue-500"
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+      {/* Header */}
+      <div className="pt-16 pb-8 px-6">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center"
+        >
+          <div className="w-20 h-20 mb-4 mx-auto rounded-full bg-emergency-ambulance flex items-center justify-center shadow-lg">
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              className="w-10 h-10 text-white"
             >
-              Register here
-            </Link>
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
           </div>
-        </CardFooter>
-      </Card>
+          <h1 className="text-3xl font-bold text-gray-800">
+            Lifeline Response
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Log in to your account
+          </p>
+        </motion.div>
+      </div>
+      
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+        className="flex-grow px-6 pb-8 flex flex-col"
+      >
+        {error && (
+          <div className="bg-red-50 text-red-700 p-3 rounded-xl mb-4 flex items-start">
+            <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label 
+              htmlFor="email" 
+              className="text-gray-700 font-medium block"
+            >
+              Email
+            </Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-emergency-ambulance focus:ring-emergency-ambulance bg-white shadow-sm"
+                required
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label 
+                htmlFor="password" 
+                className="text-gray-700 font-medium block"
+              >
+                Password
+              </Label>
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-emergency-ambulance focus:ring-emergency-ambulance bg-white shadow-sm"
+                required
+              />
+            </div>
+          </div>
+          
+          <Button 
+            type="submit" 
+            className="w-full py-6 rounded-xl text-lg font-semibold bg-emergency-ambulance hover:bg-opacity-90 transition-all shadow-md"
+            disabled={isLoading}
+          >
+            {isLoading ? "Logging in..." : "Login"}
+          </Button>
+          
+          <div className="mt-6 text-sm text-center text-gray-500 bg-gray-50 rounded-xl p-4 shadow-inner">
+            Demo credentials:<br />
+            Admin: admin@lifeline.com / adminlifeline<br />
+            Ambulance: john@ambulance.com / password<br />
+            Hospital: sarah@hospital.com / password<br />
+            Police: mike@police.com / password
+          </div>
+        </form>
+      </motion.div>
+      
+      <div className="pb-8 pt-4 text-center">
+        <div className="text-sm text-gray-500">
+          Don't have an account?{" "}
+          <Link
+            to="/register"
+            className="font-medium text-emergency-ambulance hover:text-emergency-hospital transition-colors"
+          >
+            Sign Up
+          </Link>
+        </div>
+      </div>
     </div>
   );
 };
