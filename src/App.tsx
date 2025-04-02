@@ -1,11 +1,12 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import SplashScreen from "./components/SplashScreen";
 
 // Pages
 import Login from "./pages/Login";
@@ -57,61 +58,71 @@ const ProtectedRoute = ({
 };
 
 const App = () => {
+  const [showSplash, setShowSplash] = useState(true);
+  
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+  };
+
   return (
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                
-                <Route 
-                  path="/admin" 
-                  element={
-                    <ProtectedRoute allowedRoles={["admin"]}>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/ambulance" 
-                  element={
-                    <ProtectedRoute allowedRoles={["ambulance"]}>
-                      <AmbulanceDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/hospital" 
-                  element={
-                    <ProtectedRoute allowedRoles={["hospital"]}>
-                      <HospitalDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/police" 
-                  element={
-                    <ProtectedRoute allowedRoles={["police"]}>
-                      <PoliceDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      {showSplash ? (
+        <SplashScreen onComplete={handleSplashComplete} />
+      ) : (
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  
+                  <Route 
+                    path="/admin" 
+                    element={
+                      <ProtectedRoute allowedRoles={["admin"]}>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/ambulance" 
+                    element={
+                      <ProtectedRoute allowedRoles={["ambulance"]}>
+                        <AmbulanceDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/hospital" 
+                    element={
+                      <ProtectedRoute allowedRoles={["hospital"]}>
+                        <HospitalDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/police" 
+                    element={
+                      <ProtectedRoute allowedRoles={["police"]}>
+                        <PoliceDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route path="/" element={<Navigate to="/login" replace />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      )}
     </React.StrictMode>
   );
 };
