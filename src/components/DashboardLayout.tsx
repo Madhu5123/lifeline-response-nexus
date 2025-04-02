@@ -89,9 +89,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile Header */}
-      <header className="flex items-center justify-between p-4 bg-white shadow-sm z-30">
+      <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow-sm z-30 rounded-b-xl">
         <div className="flex items-center">
           <Button
             variant="ghost"
@@ -101,14 +101,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           >
             <Menu className="h-6 w-6" />
           </Button>
-          <h1 className="text-xl font-semibold truncate">{title}</h1>
+          <h1 className="text-xl font-bold truncate">{title}</h1>
         </div>
         <div className="flex items-center space-x-3">
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
-            <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"></span>
+            <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white dark:ring-gray-800"></span>
           </Button>
-          <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
+          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-sm font-medium text-white shadow-md">
             {user?.name?.charAt(0) || 'U'}
           </div>
         </div>
@@ -127,44 +127,44 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <div 
         id="mobile-sidebar"
         className={cn(
-          "fixed inset-y-0 left-0 flex flex-col w-64 z-50 transform transition-transform duration-300 ease-in-out lg:hidden",
+          "fixed inset-y-0 left-0 flex flex-col w-[80%] max-w-xs z-50 transform transition-all duration-300 ease-in-out lg:hidden rounded-r-2xl shadow-xl",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
           getRoleBgColor()
         )}
       >
-        <div className="flex items-center justify-between p-4">
-          <h1 className="text-xl font-bold text-white">Lifeline Response</h1>
+        <div className="flex items-center justify-between p-6">
+          <h1 className="text-xl font-bold text-white">Lifeline AI</h1>
           <Button
             variant="ghost"
             size="icon"
-            className="text-white hover:bg-white hover:bg-opacity-10"
+            className="text-white hover:bg-white hover:bg-opacity-10 rounded-full"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="h-6 w-6" />
           </Button>
         </div>
 
-        <div className="px-4 py-3 border-b border-white border-opacity-20">
+        <div className="px-6 py-4 border-b border-white border-opacity-20">
           <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center">
-              <span className="text-white font-semibold">{user?.name?.charAt(0) || 'U'}</span>
+            <div className="h-12 w-12 rounded-full bg-white bg-opacity-20 flex items-center justify-center shadow-inner">
+              <span className="text-white font-semibold text-lg">{user?.name?.charAt(0) || 'U'}</span>
             </div>
             <div>
-              <div className="text-white font-medium">{user?.name}</div>
-              <div className="text-white text-opacity-80 text-xs">
+              <div className="text-white font-bold text-lg">{user?.name}</div>
+              <div className="text-white text-opacity-80 text-sm">
                 {user?.role.charAt(0).toUpperCase() + user?.role.slice(1)}
               </div>
             </div>
           </div>
         </div>
         
-        <ScrollArea className="flex-1 py-2">
-          <nav className="space-y-1 px-2">
+        <ScrollArea className="flex-1 py-4">
+          <nav className="space-y-2 px-4">
             {navItems.map((item, index) => (
               <Button
                 key={index}
                 variant="ghost"
-                className="w-full justify-start text-white hover:bg-white hover:bg-opacity-10 py-3"
+                className="w-full justify-start text-white hover:bg-white hover:bg-opacity-10 rounded-xl text-base py-4 font-medium"
                 onClick={() => {
                   navigate(item.path);
                   if (isMobile) setSidebarOpen(false);
@@ -180,7 +180,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="p-4 border-t border-white border-opacity-20">
           <Button 
             variant="ghost" 
-            className="w-full justify-start text-white hover:bg-white hover:bg-opacity-10"
+            className="w-full justify-start text-white hover:bg-white hover:bg-opacity-10 rounded-xl text-base py-3"
             onClick={handleLogout}
           >
             <LogOut className="mr-3 h-5 w-5" />
@@ -190,32 +190,32 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </div>
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex flex-col w-64 bg-white border-r fixed h-full">
-        <div className={cn("p-4", getRoleBgColor())}>
-          <h1 className="text-xl font-bold text-white">Lifeline Response</h1>
+      <div className="hidden lg:flex flex-col w-64 fixed h-full">
+        <div className={cn("p-6 rounded-br-3xl", getRoleBgColor())}>
+          <h1 className="text-xl font-bold text-white">Lifeline AI</h1>
         </div>
         
-        <div className="p-4 border-b">
+        <div className="p-4 border-b bg-white dark:bg-gray-800 rounded-tr-xl">
           <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-              <span className="font-semibold">{user?.name?.charAt(0) || 'U'}</span>
+            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-md">
+              <span className="font-bold text-white text-lg">{user?.name?.charAt(0) || 'U'}</span>
             </div>
             <div>
-              <div className="font-medium">{user?.name}</div>
-              <div className="text-gray-500 text-xs">
+              <div className="font-bold text-base">{user?.name}</div>
+              <div className="text-gray-500 dark:text-gray-400 text-xs">
                 {user?.role.charAt(0).toUpperCase() + user?.role.slice(1)}
               </div>
             </div>
           </div>
         </div>
         
-        <ScrollArea className="flex-1 py-4">
-          <nav className="space-y-1 px-3">
+        <ScrollArea className="flex-1 py-4 bg-white dark:bg-gray-800">
+          <nav className="space-y-2 px-4">
             {navItems.map((item, index) => (
               <Button
                 key={index}
                 variant="ghost"
-                className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-gray-100 py-3"
+                className="w-full justify-start text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl py-3"
                 onClick={() => navigate(item.path)}
               >
                 <item.icon className="mr-3 h-5 w-5" />
@@ -225,10 +225,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </nav>
         </ScrollArea>
         
-        <div className="p-4 border-t">
+        <div className="p-4 border-t bg-white dark:bg-gray-800 rounded-br-xl">
           <Button 
             variant="ghost" 
-            className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+            className="w-full justify-start text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl py-3"
             onClick={handleLogout}
           >
             <LogOut className="mr-3 h-5 w-5" />
@@ -238,9 +238,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto pt-0 lg:pt-4 lg:pl-64">
+      <main className="flex-1 overflow-auto pt-0 lg:pt-0 lg:pl-64">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 pt-4">
-          {children}
+          <div className="bg-transparent">
+            {children}
+          </div>
         </div>
       </main>
     </div>
