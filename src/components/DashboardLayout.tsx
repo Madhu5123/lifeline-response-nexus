@@ -1,11 +1,13 @@
 
 import React, { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, LogOut, Menu, X } from "lucide-react";
+import { Bell, LogOut, Menu, X, Home, Users, Clipboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -21,16 +23,48 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const isMobile = useIsMobile();
   
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
+  // Get nav items based on role
+  const getNavItems = () => {
+    switch(role) {
+      case "admin":
+        return [
+          { icon: Home, label: "Dashboard", path: "/admin" },
+          { icon: Users, label: "Users", path: "/admin/users" },
+          { icon: Settings, label: "Settings", path: "/admin/settings" }
+        ];
+      case "ambulance":
+        return [
+          { icon: Home, label: "Dashboard", path: "/ambulance" },
+          { icon: Clipboard, label: "Cases", path: "/ambulance/cases" }
+        ];
+      case "hospital":
+        return [
+          { icon: Home, label: "Dashboard", path: "/hospital" },
+          { icon: Clipboard, label: "Patients", path: "/hospital/patients" }
+        ];
+      case "police":
+        return [
+          { icon: Home, label: "Dashboard", path: "/police" },
+          { icon: Clipboard, label: "Reports", path: "/police/reports" }
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const navItems = getNavItems();
+
   // Handle click outside to close the sidebar on mobile
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (sidebarOpen && window.innerWidth < 1024) {
+      if (sidebarOpen && isMobile) {
         const sidebar = document.getElementById('mobile-sidebar');
         if (sidebar && !sidebar.contains(event.target as Node)) {
           setSidebarOpen(false);
@@ -42,168 +76,173 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [sidebarOpen]);
+  }, [sidebarOpen, isMobile]);
+
+  const getRoleBgColor = () => {
+    switch(role) {
+      case "ambulance": return "ambulance-gradient";
+      case "hospital": return "hospital-gradient";
+      case "police": return "police-gradient";
+      case "admin": return "admin-gradient";
+      default: return "admin-gradient";
+    }
+  };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Mobile sidebar */}
-      <div 
-        className={cn(
-          "fixed inset-0 flex z-40 lg:hidden transition-opacity duration-300 ease-in-out",
-          sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        )} 
-        role="dialog" 
-        aria-modal="true"
-      >
-        <div 
-          className={cn(
-            "fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity ease-in-out duration-300",
-            sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-          )}
-          aria-hidden="true"
-          onClick={() => setSidebarOpen(false)}
-        ></div>
-
-        {/* Mobile Sidebar Content */}
-        <div 
-          id="mobile-sidebar"
-          className={cn(
-            "relative flex-1 flex flex-col max-w-xs w-full pt-5 pb-4 transition-transform ease-in-out duration-300",
-            sidebarOpen ? "translate-x-0" : "-translate-x-full",
-            role === "ambulance" ? "ambulance-gradient" : null,
-            role === "hospital" ? "hospital-gradient" : null,
-            role === "police" ? "police-gradient" : null,
-            role === "admin" ? "admin-gradient" : null,
-          )}
-        >
-          <div className="absolute top-0 right-0 -mr-12 pt-2">
-            <Button
-              variant="ghost"
-              className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white text-white"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <span className="sr-only">Close sidebar</span>
-              <X className="h-6 w-6" aria-hidden="true" />
-            </Button>
-          </div>
-
-          <div className="flex-shrink-0 flex items-center px-4">
-            <h1 className="text-xl font-bold text-white">Lifeline Response</h1>
-          </div>
-          
-          {/* Scrollable sidebar content for mobile */}
-          <ScrollArea className="mt-5 flex-1 h-0 overflow-y-auto">
-            <div className="px-2 space-y-1">
-              {/* Sidebar content here */}
-              <div className="px-4 py-4 text-sm text-white">
-                <div className="font-medium mb-1">
-                  {user?.name}
-                </div>
-                <div className="opacity-80 text-xs">
-                  {user?.role.charAt(0).toUpperCase() + user?.role.slice(1)}
-                </div>
-              </div>
-              
-              {/* Mobile logout button */}
-              <div className="mt-auto px-4 py-4">
-                <Button 
-                  variant="ghost" 
-                  className="group flex items-center text-white hover:bg-white hover:bg-opacity-10 rounded-md w-full"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-3 h-6 w-6" />
-                  <span>Logout</span>
-                </Button>
-              </div>
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-      
-      {/* Static sidebar for desktop */}
-      <div className={cn(
-        "hidden lg:flex lg:flex-shrink-0 transition-all",
-        role === "ambulance" ? "ambulance-gradient" : null,
-        role === "hospital" ? "hospital-gradient" : null,
-        role === "police" ? "police-gradient" : null,
-        role === "admin" ? "admin-gradient" : null,
-      )}>
-        <div className="flex flex-col w-64">
-          <div className="flex flex-col h-0 flex-1">
-            <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-              <div className="flex items-center flex-shrink-0 px-4">
-                <h1 className="text-xl font-bold text-white">Lifeline Response</h1>
-              </div>
-              <ScrollArea className="mt-5 flex-1 px-4 space-y-1">
-                {/* Sidebar content here */}
-                <div className="px-4 py-4 text-sm text-white">
-                  <div className="font-medium mb-1">
-                    {user?.name}
-                  </div>
-                  <div className="opacity-80 text-xs">
-                    {user?.role.charAt(0).toUpperCase() + user?.role.slice(1)}
-                  </div>
-                </div>
-              </ScrollArea>
-            </div>
-            <div className="flex-shrink-0 flex border-t border-white border-opacity-20 p-4">
-              <Button 
-                variant="ghost" 
-                className="group flex items-center text-white hover:bg-white hover:bg-opacity-10 rounded-md w-full"
-                onClick={handleLogout}
-              >
-                <LogOut className="mr-3 h-6 w-6" />
-                <span>Logout</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Main content */}
-      <div className="flex flex-col w-0 flex-1 overflow-hidden">
-        <div className="relative z-10 flex-shrink-0 flex h-16 bg-white shadow">
+    <div className="flex flex-col h-screen bg-gray-100">
+      {/* Mobile Header */}
+      <header className="flex items-center justify-between p-4 bg-white shadow-sm z-30">
+        <div className="flex items-center">
           <Button
             variant="ghost"
-            className="lg:hidden px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+            size="icon"
+            className="mr-2 lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
-            <span className="sr-only">Open sidebar</span>
-            <Menu className="h-6 w-6" aria-hidden="true" />
+            <Menu className="h-6 w-6" />
           </Button>
-          <div className="flex-1 px-4 flex justify-between">
-            <div className="flex-1 flex items-center">
-              <h1 className="text-xl font-semibold">{title}</h1>
+          <h1 className="text-xl font-semibold truncate">{title}</h1>
+        </div>
+        <div className="flex items-center space-x-3">
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"></span>
+          </Button>
+          <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
+            {user?.name?.charAt(0) || 'U'}
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile sidebar overlay */}
+      <div 
+        className={cn(
+          "fixed inset-0 bg-gray-600 bg-opacity-75 z-40 transition-opacity duration-300 lg:hidden",
+          sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )} 
+        onClick={() => setSidebarOpen(false)}
+      ></div>
+
+      {/* Mobile Sidebar */}
+      <div 
+        id="mobile-sidebar"
+        className={cn(
+          "fixed inset-y-0 left-0 flex flex-col w-64 z-50 transform transition-transform duration-300 ease-in-out lg:hidden",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          getRoleBgColor()
+        )}
+      >
+        <div className="flex items-center justify-between p-4">
+          <h1 className="text-xl font-bold text-white">Lifeline Response</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white hover:bg-opacity-10"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X className="h-6 w-6" />
+          </Button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-white border-opacity-20">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center">
+              <span className="text-white font-semibold">{user?.name?.charAt(0) || 'U'}</span>
             </div>
-            <div className="ml-4 flex items-center md:ml-6">
-              <Button variant="ghost" className="p-1 rounded-full text-gray-400 hover:text-gray-500 relative">
-                <span className="sr-only">View notifications</span>
-                <Bell className="h-6 w-6" aria-hidden="true" />
-                <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"></span>
-              </Button>
-              
-              <div className="ml-3 relative hidden lg:block">
-                <Button
-                  variant="ghost"
-                  className="group flex items-center text-gray-500 hover:text-gray-900"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-2 h-5 w-5" />
-                  <span>Logout</span>
-                </Button>
+            <div>
+              <div className="text-white font-medium">{user?.name}</div>
+              <div className="text-white text-opacity-80 text-xs">
+                {user?.role.charAt(0).toUpperCase() + user?.role.slice(1)}
               </div>
             </div>
           </div>
         </div>
+        
+        <ScrollArea className="flex-1 py-2">
+          <nav className="space-y-1 px-2">
+            {navItems.map((item, index) => (
+              <Button
+                key={index}
+                variant="ghost"
+                className="w-full justify-start text-white hover:bg-white hover:bg-opacity-10 py-3"
+                onClick={() => {
+                  navigate(item.path);
+                  if (isMobile) setSidebarOpen(false);
+                }}
+              >
+                <item.icon className="mr-3 h-5 w-5" />
+                {item.label}
+              </Button>
+            ))}
+          </nav>
+        </ScrollArea>
 
-        <main className="flex-1 relative overflow-y-auto focus:outline-none">
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              {children}
+        <div className="p-4 border-t border-white border-opacity-20">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-white hover:bg-white hover:bg-opacity-10"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            <span>Logout</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:flex flex-col w-64 bg-white border-r fixed h-full">
+        <div className={cn("p-4", getRoleBgColor())}>
+          <h1 className="text-xl font-bold text-white">Lifeline Response</h1>
+        </div>
+        
+        <div className="p-4 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+              <span className="font-semibold">{user?.name?.charAt(0) || 'U'}</span>
+            </div>
+            <div>
+              <div className="font-medium">{user?.name}</div>
+              <div className="text-gray-500 text-xs">
+                {user?.role.charAt(0).toUpperCase() + user?.role.slice(1)}
+              </div>
             </div>
           </div>
-        </main>
+        </div>
+        
+        <ScrollArea className="flex-1 py-4">
+          <nav className="space-y-1 px-3">
+            {navItems.map((item, index) => (
+              <Button
+                key={index}
+                variant="ghost"
+                className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-gray-100 py-3"
+                onClick={() => navigate(item.path)}
+              >
+                <item.icon className="mr-3 h-5 w-5" />
+                {item.label}
+              </Button>
+            ))}
+          </nav>
+        </ScrollArea>
+        
+        <div className="p-4 border-t">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            <span>Logout</span>
+          </Button>
+        </div>
       </div>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto pt-0 lg:pt-4 lg:pl-64">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 pt-4">
+          {children}
+        </div>
+      </main>
     </div>
   );
 };
