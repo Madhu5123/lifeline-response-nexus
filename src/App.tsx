@@ -1,4 +1,5 @@
 
+import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,7 +16,15 @@ import HospitalDashboard from "./pages/HospitalDashboard";
 import PoliceDashboard from "./pages/PoliceDashboard";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Protected Route Component
 const ProtectedRoute = ({ 
@@ -47,60 +56,64 @@ const ProtectedRoute = ({
   return <>{children}</>;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute allowedRoles={["admin"]}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/ambulance" 
-              element={
-                <ProtectedRoute allowedRoles={["ambulance"]}>
-                  <AmbulanceDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/hospital" 
-              element={
-                <ProtectedRoute allowedRoles={["hospital"]}>
-                  <HospitalDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/police" 
-              element={
-                <ProtectedRoute allowedRoles={["police"]}>
-                  <PoliceDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  return (
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                
+                <Route 
+                  path="/admin" 
+                  element={
+                    <ProtectedRoute allowedRoles={["admin"]}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                <Route 
+                  path="/ambulance" 
+                  element={
+                    <ProtectedRoute allowedRoles={["ambulance"]}>
+                      <AmbulanceDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                <Route 
+                  path="/hospital" 
+                  element={
+                    <ProtectedRoute allowedRoles={["hospital"]}>
+                      <HospitalDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                <Route 
+                  path="/police" 
+                  element={
+                    <ProtectedRoute allowedRoles={["police"]}>
+                      <PoliceDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                <Route path="/" element={<Navigate to="/login" replace />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </React.StrictMode>
+  );
+};
 
 export default App;
