@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, MapPin, Phone } from "lucide-react";
+import { AlertCircle, MapPin, Phone, Send, Clock, CheckCircle, User, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   collection, 
@@ -339,54 +339,61 @@ const AmbulanceDashboard: React.FC = () => {
 
   return (
     <DashboardLayout title="Ambulance Dashboard" role="ambulance">
-      <div className="space-y-6">
+      <div className="space-y-8 p-2 pb-8">
         {loading ? (
-          <Card>
-            <CardContent className="flex items-center justify-center h-40">
-              <p>Loading...</p>
-            </CardContent>
-          </Card>
+          <div className="flex justify-center p-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+          </div>
         ) : !activeCase ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>New Emergency Case</CardTitle>
-              <CardDescription>
-                Enter patient information to request hospital assistance
-              </CardDescription>
+          <Card className="rounded-xl overflow-hidden border-0 shadow-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+            <CardHeader className="bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/30 border-b border-red-100 dark:border-red-800/20">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-800 flex items-center justify-center">
+                  <User className="h-6 w-6 text-red-600 dark:text-red-300" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">New Emergency Case</CardTitle>
+                  <CardDescription>
+                    Enter patient information to request assistance
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="patientName">Patient Name</Label>
+            <CardContent className="space-y-6 p-6">
+              <div className="space-y-3">
+                <Label htmlFor="patientName" className="text-sm font-medium">Patient Name</Label>
                 <Input
                   id="patientName"
                   placeholder="Enter patient name"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
+                  className="rounded-xl h-12"
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="patientAge">Age</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="patientAge" className="text-sm font-medium">Age</Label>
                   <Input
                     id="patientAge"
                     type="number"
                     placeholder="Patient's age"
                     value={patientAge}
                     onChange={(e) => setPatientAge(e.target.value)}
+                    className="rounded-xl h-12"
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="patientGender">Gender</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="patientGender" className="text-sm font-medium">Gender</Label>
                   <Select 
                     value={patientGender} 
                     onValueChange={setPatientGender}
                   >
-                    <SelectTrigger id="patientGender">
+                    <SelectTrigger id="patientGender" className="rounded-xl h-12">
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="male">Male</SelectItem>
                       <SelectItem value="female">Female</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
@@ -395,54 +402,67 @@ const AmbulanceDashboard: React.FC = () => {
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="symptoms">Symptoms/Condition</Label>
+              <div className="space-y-3">
+                <Label htmlFor="symptoms" className="text-sm font-medium">Symptoms/Condition</Label>
                 <Textarea
                   id="symptoms"
                   placeholder="Describe the patient's symptoms and condition"
                   value={symptoms}
                   onChange={(e) => setSymptoms(e.target.value)}
                   rows={3}
+                  className="rounded-xl resize-none"
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="severity">Severity</Label>
+              <div className="space-y-3">
+                <Label htmlFor="severity" className="text-sm font-medium">Severity</Label>
                 <Select 
                   value={severity} 
                   onValueChange={(value) => setSeverity(value as any)}
                 >
-                  <SelectTrigger id="severity">
+                  <SelectTrigger id="severity" className="rounded-xl h-12">
                     <SelectValue placeholder="Select severity level" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="serious">Serious</SelectItem>
-                    <SelectItem value="stable">Stable</SelectItem>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="critical" className="text-red-600">Critical</SelectItem>
+                    <SelectItem value="serious" className="text-orange-600">Serious</SelectItem>
+                    <SelectItem value="stable" className="text-green-600">Stable</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="bg-gray-50 dark:bg-gray-900 p-6">
               <Button 
                 onClick={handleSubmitCase} 
                 disabled={isSubmitting}
-                className="w-full"
+                className="w-full rounded-full h-12 text-base flex items-center gap-2"
               >
+                <Send className="h-4 w-4" />
                 {isSubmitting ? "Submitting..." : "Submit Emergency Case"}
               </Button>
             </CardFooter>
           </Card>
         ) : (
-          <div className="space-y-4">
-            <Card className="border-t-4 border-t-emergency-ambulance">
+          <div className="space-y-6">
+            <Card className="rounded-xl overflow-hidden border-0 shadow-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+              <div className="h-2 bg-emergency-ambulance"></div>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>Active Emergency Case</CardTitle>
-                    <CardDescription>
-                      Case #{activeCase.id.substring(0, 6)}
-                    </CardDescription>
+                  <div className="flex items-center gap-3">
+                    <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                      activeCase.status === "pending" ? "bg-yellow-500" : 
+                      activeCase.status === "accepted" ? "bg-blue-500" : 
+                      activeCase.status === "en-route" ? "bg-purple-500" : 
+                      "bg-green-500"
+                    } text-white`}>
+                      <FileText className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">Active Emergency</CardTitle>
+                      <CardDescription>
+                        Case #{activeCase.id.substring(0, 6)}
+                      </CardDescription>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Badge className={getSeverityBadgeClass(activeCase.severity)}>
@@ -454,36 +474,48 @@ const AmbulanceDashboard: React.FC = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Patient</p>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
                     <p className="font-medium">{activeCase.patientName}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Age/Gender</p>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
                     <p className="font-medium">{activeCase.age} / {activeCase.gender.charAt(0).toUpperCase() + activeCase.gender.slice(1)}</p>
                   </div>
                 </div>
                 
-                <div>
-                  <p className="text-sm text-gray-500">Symptoms</p>
-                  <p>{activeCase.symptoms}</p>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Symptoms</p>
+                  <p className="text-sm">{activeCase.symptoms}</p>
                 </div>
                 
                 {activeCase.hospital && (
-                  <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-                    <h3 className="font-semibold text-blue-800 mb-2">Hospital Information</h3>
-                    <p className="text-blue-900 font-medium">{activeCase.hospital.name}</p>
-                    <div className="flex items-center text-blue-700 text-sm gap-1 mt-1">
-                      <MapPin className="h-4 w-4" />
-                      <p>{activeCase.hospital.address}</p>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-xl border border-blue-100 dark:border-blue-800">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="h-5 w-5 text-blue-600 dark:text-blue-300">
+                          <path d="M19 9h-5V4H8v5H3v8h5v5h6v-5h5V9z"></path>
+                        </svg>
+                      </div>
+                      <h3 className="font-semibold text-blue-800 dark:text-blue-300 text-lg">Hospital Information</h3>
                     </div>
-                    <div className="flex items-center text-blue-700 text-sm gap-1">
-                      <Phone className="h-4 w-4" />
-                      <p>{activeCase.hospital.contact}</p>
+                    
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg mb-3">
+                      <p className="text-blue-900 dark:text-blue-100 font-medium text-lg">{activeCase.hospital.name}</p>
+                      <div className="flex items-center text-blue-700 dark:text-blue-300 text-sm gap-2 mt-2">
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        <p>{activeCase.hospital.address}</p>
+                      </div>
+                      <div className="flex items-center text-blue-700 dark:text-blue-300 text-sm gap-2 mt-1">
+                        <Phone className="h-4 w-4 shrink-0" />
+                        <p>{activeCase.hospital.contact}</p>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-2">
+                        <span className="font-medium">Distance:</span> {activeCase.hospital.distance}
+                      </p>
                     </div>
-                    <p className="text-sm text-blue-700 mt-1">Distance: {activeCase.hospital.distance}</p>
                     
                     <div className="flex items-center mt-4 space-x-3">
                       <a 
@@ -492,25 +524,27 @@ const AmbulanceDashboard: React.FC = () => {
                         rel="noopener noreferrer"
                         className="flex-1"
                       >
-                        <Button variant="outline" className="w-full">
+                        <Button variant="outline" className="w-full rounded-full h-11">
                           Open Google Maps
                         </Button>
                       </a>
                       
                       {activeCase.status === "accepted" && (
                         <Button 
-                          className="flex-1"
+                          className="flex-1 rounded-full h-11 bg-purple-600 hover:bg-purple-700"
                           onClick={handleMarkEnRoute}
                         >
+                          <Clock className="h-4 w-4 mr-1" />
                           Mark En Route
                         </Button>
                       )}
                       
                       {activeCase.status === "en-route" && (
                         <Button 
-                          className="flex-1"
+                          className="flex-1 rounded-full h-11 bg-green-600 hover:bg-green-700"
                           onClick={handleMarkArrived}
                         >
+                          <CheckCircle className="h-4 w-4 mr-1" />
                           Mark Arrived
                         </Button>
                       )}
@@ -520,9 +554,10 @@ const AmbulanceDashboard: React.FC = () => {
               </CardContent>
               
               {activeCase.status === "arrived" && (
-                <CardFooter>
-                  <div className="bg-green-50 p-3 rounded-md border border-green-100 w-full">
-                    <p className="text-green-800 text-center">
+                <CardFooter className="bg-green-50 dark:bg-green-900/20 p-5 border-t border-green-100 dark:border-green-800">
+                  <div className="flex items-center gap-3 w-full">
+                    <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400 shrink-0" />
+                    <p className="text-green-800 dark:text-green-200">
                       Patient has been successfully delivered to the hospital. This case will be archived.
                     </p>
                   </div>
@@ -531,41 +566,66 @@ const AmbulanceDashboard: React.FC = () => {
             </Card>
             
             {showHospitals && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Nearby Hospitals</CardTitle>
-                  <CardDescription>
-                    Select a hospital to transport the patient
-                  </CardDescription>
+              <Card className="rounded-xl overflow-hidden border-0 shadow-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-b border-blue-100 dark:border-blue-800/20">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="h-5 w-5 text-blue-600 dark:text-blue-300">
+                        <path d="M19 9h-5V4H8v5H3v8h5v5h6v-5h5V9z"></path>
+                      </svg>
+                    </div>
+                    <div>
+                      <CardTitle>Nearby Hospitals</CardTitle>
+                      <CardDescription>
+                        Select a hospital to transport the patient
+                      </CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5 p-5">
                   {hospitals.length === 0 ? (
-                    <div className="text-center py-4 text-gray-500">
-                      Loading hospitals...
+                    <div className="flex justify-center items-center p-8">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                     </div>
                   ) : (
                     hospitals.map(hospital => (
-                      <div key={hospital.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between gap-4">
-                        <div>
-                          <h3 className="font-semibold">{hospital.name}</h3>
-                          <div className="flex items-center text-gray-600 text-sm gap-1 mt-1">
-                            <MapPin className="h-4 w-4" />
-                            <p>{hospital.address}</p>
+                      <div key={hospital.id} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+                        <div className="p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="h-5 w-5 text-blue-600 dark:text-blue-300">
+                                <path d="M19 9h-5V4H8v5H3v8h5v5h6v-5h5V9z"></path>
+                              </svg>
+                            </div>
+                            <h3 className="font-semibold text-lg">{hospital.name}</h3>
                           </div>
-                          <div className="flex items-center text-gray-600 text-sm gap-1">
-                            <Phone className="h-4 w-4" />
-                            <p>{hospital.contact}</p>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-sm">
-                            <span className="text-gray-700">Distance: {hospital.distance}</span>
-                            <span className="text-gray-700">Available Beds: {hospital.beds}</span>
+                          
+                          <div className="ml-1">
+                            <div className="flex items-center text-gray-600 dark:text-gray-300 text-sm gap-2 mt-1">
+                              <MapPin className="h-4 w-4 shrink-0" />
+                              <p>{hospital.address}</p>
+                            </div>
+                            <div className="flex items-center text-gray-600 dark:text-gray-300 text-sm gap-2 mt-1">
+                              <Phone className="h-4 w-4 shrink-0" />
+                              <p>{hospital.contact}</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3 mt-3">
+                              <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-lg text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Distance</p>
+                                <p className="font-medium">{hospital.distance}</p>
+                              </div>
+                              <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-lg text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Available Beds</p>
+                                <p className="font-medium">{hospital.beds}</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                         
-                        <div className="flex items-center md:items-start">
+                        <div className="bg-gray-50 dark:bg-gray-900 p-3 border-t border-gray-100 dark:border-gray-700">
                           <Button 
-                            variant="outline" 
-                            className="w-full md:w-auto"
+                            className="w-full rounded-full"
                             onClick={() => handleAcceptHospital(hospital)}
                           >
                             Select Hospital
@@ -580,18 +640,21 @@ const AmbulanceDashboard: React.FC = () => {
           </div>
         )}
         
-        <Card>
-          <CardHeader className="bg-yellow-50 text-yellow-800 border-b border-yellow-200">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 mt-0.5" />
-              <CardTitle className="text-yellow-800">Important Notice</CardTitle>
+        <Card className="rounded-xl overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-amber-50 text-amber-800 border-b border-amber-100 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800/30 flex flex-row gap-3 items-start">
+            <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+            <div>
+              <CardTitle className="text-amber-800 dark:text-amber-200">Important Notice</CardTitle>
+              <CardDescription className="text-amber-700 dark:text-amber-300">
+                This is a demo version of the Lifeline Emergency Response app
+              </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="pt-4">
-            <p>
-              This is a demo version of the Lifeline Emergency Response app. In a real implementation, this would include:
+          <CardContent className="pt-5">
+            <p className="text-sm">
+              In a real implementation, this would include:
             </p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc pl-5 mt-2 space-y-1 text-sm">
               <li>GPS tracking of the ambulance</li>
               <li>Real-time communication with hospitals</li>
               <li>Automatic notification to police when en route</li>
