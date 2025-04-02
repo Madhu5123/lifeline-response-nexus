@@ -39,7 +39,7 @@ const Login: React.FC = () => {
       await login(email, password);
       toast({
         title: "Login successful",
-        description: "Welcome to Lifeline Emergency Response",
+        description: "Welcome to Lifeline AI",
       });
     } catch (error: any) {
       setError(error.message || "Failed to login");
@@ -74,7 +74,7 @@ const Login: React.FC = () => {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-800">
-            Lifeline Response
+            Lifeline AI
           </h1>
           <p className="text-gray-600 mt-2">
             Log in to your account
@@ -147,14 +147,6 @@ const Login: React.FC = () => {
           >
             {isLoading ? "Logging in..." : "Login"}
           </Button>
-          
-          <div className="mt-6 text-sm text-center text-gray-500 bg-gray-50 rounded-xl p-4 shadow-inner">
-            Demo credentials:<br />
-            Admin: admin@lifeline.com / adminlifeline<br />
-            Ambulance: john@ambulance.com / password<br />
-            Hospital: sarah@hospital.com / password<br />
-            Police: mike@police.com / password
-          </div>
         </form>
       </motion.div>
       

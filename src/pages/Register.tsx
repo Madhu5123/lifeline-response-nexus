@@ -518,7 +518,7 @@ const Register: React.FC = () => {
             Create an Account
           </h1>
           <p className="text-gray-600 mt-1">
-            Join Lifeline Emergency Response
+            Join Lifeline Emergency Response AI
           </p>
         </motion.div>
         

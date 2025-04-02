@@ -1,6 +1,6 @@
 
 const CLOUDINARY_UPLOAD_PRESET = "lifeline_app";
-const CLOUDINARY_CLOUD_NAME = "replace-with-your-cloudinary-name";
+const CLOUDINARY_CLOUD_NAME = "dlfudfaih";
 
 export interface UploadResponse {
   secure_url: string;
