@@ -15,9 +15,10 @@ import {
   collection,
   query,
   where,
-  getDocs
+  getDocs,
+  onSnapshot
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, clearPersistenceCache } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
 export type UserRole = "admin" | "ambulance" | "hospital" | "police" | "unverified";
@@ -46,6 +47,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (userData: Omit<User, "id" | "status"> & { password: string }) => Promise<void>;
   logout: () => void;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,48 +66,100 @@ const ADMIN_USER: User = {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentFirebaseUser, setCurrentFirebaseUser] = useState<FirebaseUser | null>(null);
   const { toast } = useToast();
+
+  // New function to refresh user data on demand
+  const refreshUserData = async () => {
+    if (!currentFirebaseUser) return;
+    
+    try {
+      const userDoc = await getDoc(doc(db, "users", currentFirebaseUser.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as Omit<User, "id">;
+        
+        // Check if user is approved
+        if (userData.status !== "approved" && userData.role !== "admin") {
+          // User is not approved, sign them out
+          await signOut(auth);
+          setUser(null);
+          toast({
+            title: "Account not approved",
+            description: "Your account is pending approval by an administrator",
+            variant: "destructive",
+          });
+        } else {
+          // User is approved, set user data
+          setUser({
+            id: currentFirebaseUser.uid,
+            ...userData,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+    }
+  };
 
   // Check for existing session on mount and listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setIsLoading(true);
+      setCurrentFirebaseUser(firebaseUser);
       
       if (firebaseUser) {
-        // User is signed in, fetch their data from Firestore
+        // User is signed in, set up a real-time listener to their Firestore document
         try {
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as Omit<User, "id">;
-            
-            // Check if user is approved
-            if (userData.status !== "approved" && userData.role !== "admin") {
-              // User is not approved, sign them out
-              await signOut(auth);
-              setUser(null);
-              toast({
-                title: "Account not approved",
-                description: "Your account is pending approval by an administrator",
-                variant: "destructive",
-              });
-            } else {
-              // User is approved, set user data
-              setUser({
-                id: firebaseUser.uid,
-                ...userData,
-              });
+          // Use onSnapshot to get real-time updates to the user document
+          const unsubscribeSnapshot = onSnapshot(
+            doc(db, "users", firebaseUser.uid),
+            (docSnapshot) => {
+              if (docSnapshot.exists()) {
+                const userData = docSnapshot.data() as Omit<User, "id">;
+                
+                // Check if user is approved
+                if (userData.status !== "approved" && userData.role !== "admin") {
+                  // User is not approved, sign them out
+                  signOut(auth).then(() => {
+                    setUser(null);
+                    toast({
+                      title: "Account not approved",
+                      description: "Your account is pending approval by an administrator",
+                      variant: "destructive",
+                    });
+                  });
+                } else {
+                  // User is approved, set user data
+                  setUser({
+                    id: firebaseUser.uid,
+                    ...userData,
+                  });
+                }
+              } else {
+                // User document doesn't exist
+                signOut(auth).then(() => {
+                  setUser(null);
+                  toast({
+                    title: "Account error",
+                    description: "Your account data could not be found",
+                    variant: "destructive",
+                  });
+                });
+              }
+              setIsLoading(false);
+            },
+            (error) => {
+              console.error("Error listening to user document:", error);
+              setIsLoading(false);
             }
-          } else {
-            // User document doesn't exist
-            await signOut(auth);
-            setUser(null);
-            toast({
-              title: "Account error",
-              description: "Your account data could not be found",
-              variant: "destructive",
-            });
-          }
+          );
+          
+          // Return a cleanup function to unsubscribe from both listeners
+          return () => {
+            unsubscribeSnapshot();
+            unsubscribe();
+          };
         } catch (error) {
           console.error("Error fetching user data:", error);
           await signOut(auth);
@@ -115,13 +169,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             description: "There was an error retrieving your account information",
             variant: "destructive",
           });
+          setIsLoading(false);
         }
       } else {
         // User is signed out
         setUser(null);
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     });
     
     // Cleanup subscription on unmount
@@ -170,6 +224,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
+      // Clear any existing persistence cache to ensure fresh data
+      await clearPersistenceCache();
+      
       // Check if email already exists in Firestore
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("email", "==", userData.email));
@@ -219,6 +276,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      // Clear persistence cache on logout to ensure fresh data on next login
+      await clearPersistenceCache();
+      
       // Check if admin user
       if (user?.email === ADMIN_EMAIL) {
         // Simply clear the user state
@@ -248,6 +308,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
+        refreshUserData,
       }}
     >
       {children}

@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getFirestore, enableIndexedDbPersistence, clearIndexedDbPersistence, connectFirestoreEmulator } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -35,5 +35,41 @@ export const enableOfflinePersistence = async () => {
       // The current browser does not support all of the features required to enable persistence
       console.warn("Current browser doesn't support persistence");
     }
+  }
+};
+
+// Clear persistence cache - can be used to solve data sync issues
+export const clearPersistenceCache = async () => {
+  try {
+    await clearIndexedDbPersistence(db);
+    console.log("IndexedDB persistence cleared successfully");
+    return true;
+  } catch (error) {
+    console.error("Error clearing persistence:", error);
+    return false;
+  }
+};
+
+// Helper to initialize Firebase in App.tsx with proper error handling
+export const initializeFirebase = async (isMobile: boolean) => {
+  try {
+    // If on mobile, enable offline persistence
+    if (isMobile) {
+      await enableOfflinePersistence();
+    }
+    
+    // Setup listeners for network connectivity issues
+    window.addEventListener('online', () => {
+      console.log('App is online. Reconnecting to Firestore...');
+    });
+    
+    window.addEventListener('offline', () => {
+      console.log('App is offline. Some changes may be cached locally.');
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error initializing Firebase:", error);
+    return false;
   }
 };

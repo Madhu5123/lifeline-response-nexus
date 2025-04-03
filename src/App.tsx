@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import SplashScreen from "./components/SplashScreen";
+import { initializeFirebase } from "./lib/firebase";
+import { useToast } from "@/hooks/use-toast";
+import { useMobile } from "./hooks/use-mobile";
 
 // Pages
 import Login from "./pages/Login";
@@ -17,12 +19,15 @@ import HospitalDashboard from "./pages/HospitalDashboard";
 import PoliceDashboard from "./pages/PoliceDashboard";
 import NotFound from "./pages/NotFound";
 
-// Create a client
+// Create a client with more aggressive refetching
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60, // 1 minute (decreased from 5 minutes)
+      refetchOnWindowFocus: true, // Changed to true to refetch when tab gets focus
+      refetchOnMount: true, // Refetch when component mounts
+      refetchOnReconnect: true, // Refetch when reconnecting
+      retry: 3, // Retry failed queries up to 3 times
     },
   },
 });
@@ -59,10 +64,65 @@ const ProtectedRoute = ({
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(true);
+  const [firebaseInitialized, setFirebaseInitialized] = useState(false);
+  const { toast } = useToast();
+  const isMobile = useMobile();
+  
+  // Initialize Firebase with proper configuration
+  useEffect(() => {
+    const setupFirebase = async () => {
+      const success = await initializeFirebase(isMobile);
+      
+      if (success) {
+        setFirebaseInitialized(true);
+      } else {
+        toast({
+          title: "Connection Issue",
+          description: "There was a problem connecting to the server. Some features may not work correctly.",
+          variant: "destructive",
+        });
+        setFirebaseInitialized(true); // Still proceed, but user has been warned
+      }
+    };
+    
+    setupFirebase();
+    
+    // Setup online/offline detection with toast notifications
+    const handleOnline = () => {
+      toast({
+        title: "You're back online",
+        description: "Data will now sync with the server",
+      });
+    };
+    
+    const handleOffline = () => {
+      toast({
+        title: "You're offline",
+        description: "Some changes may not be saved until you reconnect",
+        variant: "destructive",
+      });
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [toast, isMobile]);
   
   const handleSplashComplete = () => {
     setShowSplash(false);
   };
+
+  if (!firebaseInitialized && !showSplash) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        Connecting to servers...
+      </div>
+    );
+  }
 
   return (
     <React.StrictMode>
