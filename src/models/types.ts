@@ -84,5 +84,6 @@ export interface Ambulance {
   destination?: Destination;
   caseId?: string;
   isNearby?: boolean;
+  distance?: string; // Added distance property
   lastUpdated: Date;
 }
