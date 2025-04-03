@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,6 +83,19 @@ const Register: React.FC = () => {
   const { register } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Auto redirect to login after registration success dialog is shown
+  useEffect(() => {
+    if (showDialog) {
+      // Set a timeout to automatically redirect to login page after showing the success dialog
+      const redirectTimer = setTimeout(() => {
+        setShowDialog(false);
+        navigate("/login");
+      }, 3000); // 3 seconds delay before redirect
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [showDialog, navigate]);
 
   const handleImageChange = (id: string, file: File | null) => {
     setRoleImages(prev => ({
@@ -203,6 +216,7 @@ const Register: React.FC = () => {
         }
       });
       
+      // Show success dialog and automatically redirect to login after a delay
       setShowDialog(true);
       
     } catch (error: any) {
@@ -571,6 +585,9 @@ const Register: React.FC = () => {
           </DialogHeader>
           <p className="text-sm text-gray-500">
             You will receive a notification once your account has been approved. This usually takes 24-48 hours.
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Redirecting to login page...
           </p>
           <DialogFooter>
             <Button onClick={handleCloseDialog} className="bg-emergency-ambulance hover:bg-opacity-90">

@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import { auth, db, clearPersistenceCache } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 export type UserRole = "admin" | "ambulance" | "hospital" | "police" | "unverified";
 
@@ -252,6 +253,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         details: userData.details || {},
         createdAt: serverTimestamp(),
       });
+      
+      // Sign out the user immediately after registration since they need approval
+      await signOut(auth);
       
       toast({
         title: "Registration successful",
