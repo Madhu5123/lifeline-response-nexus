@@ -1,59 +1,121 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, MapPin, Phone } from "lucide-react";
+import { AlertCircle, MapPin, Phone, RefreshCw } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { 
   collection, 
   query, 
   where, 
   onSnapshot,
-  Timestamp
+  Timestamp,
+  getDocs
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, retryOperation } from "@/lib/firebase";
 import { Ambulance } from "@/models/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { calculateDistance } from "@/utils/distance";
 
 const NEARBY_THRESHOLD = 5;
+const DATA_REFRESH_INTERVAL = 10000; // 10 seconds
 
 const PoliceDashboard: React.FC = () => {
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { user } = useAuth();
+  const { toast } = useToast();
   
-  const policeLocation = useGeolocation({ enableHighAccuracy: true }, 10000);
+  const policeLocation = useGeolocation({ enableHighAccuracy: true }, 5000);
   
-  useEffect(() => {
-    const fetchAmbulances = () => {
-      try {
-        const ambulancesRef = collection(db, "ambulances");
+  const fetchAmbulances = useCallback(async (forceRefresh = false) => {
+    try {
+      setError(null);
+      if (forceRefresh) {
+        setLoading(true);
+      }
+      
+      const ambulancesRef = collection(db, "ambulances");
+      
+      // First try to get data from server
+      const snapshot = await retryOperation(async () => {
+        return await getDocs(ambulancesRef);
+      });
+      
+      const ambulancesData: Ambulance[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
         
-        const unsubscribe = onSnapshot(ambulancesRef, (snapshot) => {
-          const ambulancesData: Ambulance[] = [];
+        if (data.location && data.location.latitude && data.location.longitude) {
+          let isNearby = false;
+          let distance = "Unknown";
+          
+          if (policeLocation.latitude && policeLocation.longitude) {
+            const calculatedDistance = calculateDistance(
+              policeLocation.latitude,
+              policeLocation.longitude,
+              data.location.latitude,
+              data.location.longitude
+            );
+            isNearby = calculatedDistance <= NEARBY_THRESHOLD;
+            distance = calculatedDistance.toFixed(1) + " km";
+          } else {
+            // If police location is not available, use a fallback
+            isNearby = Math.random() > 0.7;
+          }
+          
+          ambulancesData.push({
+            id: data.id,
+            driverName: data.driverName,
+            vehicleNumber: data.vehicleNumber,
+            severity: data.severity,
+            status: data.status,
+            location: data.location,
+            destination: data.destination,
+            caseId: data.caseId,
+            isNearby,
+            lastUpdated: data.lastUpdated?.toDate() || new Date(),
+            distance
+          } as Ambulance);
+        }
+      });
+      
+      setAmbulances(ambulancesData);
+      setLastUpdated(new Date());
+      setLoading(false);
+      
+      // Set up real-time listener
+      const unsubscribe = onSnapshot(ambulancesRef, 
+        (snapshot) => {
+          const updatedData: Ambulance[] = [];
           
           snapshot.forEach((doc) => {
             const data = doc.data();
             
             if (data.location && data.location.latitude && data.location.longitude) {
               let isNearby = false;
+              let distance = "Unknown";
               
               if (policeLocation.latitude && policeLocation.longitude) {
-                const distance = calculateDistance(
+                const calculatedDistance = calculateDistance(
                   policeLocation.latitude,
                   policeLocation.longitude,
                   data.location.latitude,
                   data.location.longitude
                 );
-                isNearby = distance <= NEARBY_THRESHOLD;
+                isNearby = calculatedDistance <= NEARBY_THRESHOLD;
+                distance = calculatedDistance.toFixed(1) + " km";
               } else {
                 isNearby = Math.random() > 0.7;
               }
               
-              ambulancesData.push({
+              updatedData.push({
                 id: data.id,
                 driverName: data.driverName,
                 vehicleNumber: data.vehicleNumber,
@@ -64,34 +126,64 @@ const PoliceDashboard: React.FC = () => {
                 caseId: data.caseId,
                 isNearby,
                 lastUpdated: data.lastUpdated?.toDate() || new Date(),
-                distance: policeLocation.latitude && policeLocation.longitude ? 
-                  calculateDistance(
-                    policeLocation.latitude,
-                    policeLocation.longitude,
-                    data.location.latitude,
-                    data.location.longitude
-                  ).toFixed(1) + " km" : 
-                  "Unknown",
+                distance
               } as Ambulance);
             }
           });
           
-          setAmbulances(ambulancesData);
+          setAmbulances(updatedData);
+          setLastUpdated(new Date());
           setLoading(false);
-        }, (error) => {
-          console.error("Error fetching ambulances:", error);
-          setLoading(false);
-        });
-        
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Error setting up ambulances listener:", error);
-        setLoading(false);
-      }
-    };
+        },
+        (error) => {
+          console.error("Error in real-time ambulance listener:", error);
+          setError("Failed to get real-time updates. Using cached data.");
+          toast({
+            title: "Connection issue",
+            description: "Using last known data. Some information may be outdated.",
+            variant: "destructive",
+          });
+        }
+      );
+      
+      return unsubscribe;
+    } catch (error) {
+      console.error("Error fetching ambulances:", error);
+      setError("Failed to load ambulance data. Please try again.");
+      setLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to load ambulance data. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [policeLocation.latitude, policeLocation.longitude, toast]);
+  
+  useEffect(() => {
+    let unsubscribe: () => void = () => {};
     
-    fetchAmbulances();
-  }, [policeLocation.latitude, policeLocation.longitude]);
+    fetchAmbulances().then(unsub => {
+      if (unsub) unsubscribe = unsub;
+    });
+    
+    // Set up interval to refresh data
+    const intervalId = setInterval(() => {
+      fetchAmbulances();
+    }, DATA_REFRESH_INTERVAL);
+    
+    return () => {
+      unsubscribe();
+      clearInterval(intervalId);
+    };
+  }, [fetchAmbulances]);
+  
+  const handleRefresh = () => {
+    fetchAmbulances(true);
+    toast({
+      title: "Refreshing data",
+      description: "Getting the latest ambulance information...",
+    });
+  };
   
   const getStatusBadgeClass = (status: string) => {
     switch(status) {
@@ -129,6 +221,22 @@ const PoliceDashboard: React.FC = () => {
   return (
     <DashboardLayout title="Police Dashboard" role="police">
       <div className="space-y-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm text-muted-foreground">
+            Last updated: {formatTimestamp(lastUpdated)}
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleRefresh}
+            disabled={loading}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+        
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
@@ -215,10 +323,27 @@ const PoliceDashboard: React.FC = () => {
               </CardContent>
             </Card>
             
+            {error && (
+              <Card className="border-t-4 border-t-yellow-500">
+                <CardContent className="pt-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 mt-0.5 text-yellow-500" />
+                    <div>
+                      <p className="font-medium">Connection issue</p>
+                      <p className="text-sm text-gray-600">{error}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             {loading ? (
               <Card>
                 <CardContent className="flex items-center justify-center h-40">
-                  <p>Loading ambulance data...</p>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary"></div>
+                    <p>Loading ambulance data...</p>
+                  </div>
                 </CardContent>
               </Card>
             ) : ambulances.filter(a => a.isNearby).length > 0 && (
@@ -281,7 +406,10 @@ const PoliceDashboard: React.FC = () => {
             {loading ? (
               <Card>
                 <CardContent className="flex items-center justify-center h-40">
-                  <p>Loading ambulance data...</p>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary"></div>
+                    <p>Loading ambulance data...</p>
+                  </div>
                 </CardContent>
               </Card>
             ) : ambulances.length > 0 ? (
