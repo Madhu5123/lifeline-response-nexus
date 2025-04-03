@@ -2,7 +2,8 @@ import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
 
-export function useIsMobile() {
+// Renamed from useIsMobile to useMobile to match the import in App.tsx
+export function useMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
 
   React.useEffect(() => {
@@ -17,3 +18,6 @@ export function useIsMobile() {
 
   return !!isMobile
 }
+
+// Keep the original function name as an alias for backward compatibility
+export const useIsMobile = useMobile;
