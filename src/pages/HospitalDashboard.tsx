@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +20,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { EmergencyCase } from "@/models/types";
+import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
 
 const HospitalDashboard: React.FC = () => {
   const [pendingCases, setPendingCases] = useState<EmergencyCase[]>([]);
@@ -36,7 +36,6 @@ const HospitalDashboard: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Fetch pending cases
   useEffect(() => {
     if (!user) return;
     
@@ -89,7 +88,6 @@ const HospitalDashboard: React.FC = () => {
     fetchPendingCases();
   }, [user, toast]);
   
-  // Fetch active cases for this hospital
   useEffect(() => {
     if (!user) return;
     
@@ -140,7 +138,6 @@ const HospitalDashboard: React.FC = () => {
     fetchActiveCases();
   }, [user, toast]);
   
-  // Fetch case history for this hospital
   useEffect(() => {
     if (!user) return;
     
@@ -194,17 +191,15 @@ const HospitalDashboard: React.FC = () => {
     if (!user) return;
     
     try {
-      // Get the hospital details
       const hospitalData = {
         id: user.id,
         name: user.details?.organization || "Hospital",
         address: user.details?.address || "Hospital Address",
         contact: user.details?.phone || "Contact Number",
-        distance: "Calculating...", // In a real app, calculate from coordinates
+        distance: "Calculating...",
         beds: stats.availableBeds,
       };
       
-      // Update the case in Firestore
       const caseRef = doc(db, "emergencyCases", caseId);
       await updateDoc(caseRef, {
         status: "accepted",
@@ -213,7 +208,6 @@ const HospitalDashboard: React.FC = () => {
         updatedAt: serverTimestamp(),
       });
       
-      // Update available beds
       setStats(prev => ({
         ...prev,
         availableBeds: prev.availableBeds - 1
@@ -235,15 +229,11 @@ const HospitalDashboard: React.FC = () => {
   
   const handleRejectCase = async (caseId: string) => {
     try {
-      // In a real app, you might want to record the rejection reason
-      // For now, we'll just remove this hospital from consideration
-      
       toast({
         title: "Case Rejected",
         description: `You have rejected the case. Other hospitals will be notified.`,
       });
       
-      // Remove this case from the pending list in the UI
       setPendingCases(pendingCases.filter(c => c.id !== caseId));
     } catch (error) {
       console.error("Error rejecting case:", error);

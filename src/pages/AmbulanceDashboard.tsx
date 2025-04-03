@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { EmergencyCase, Hospital } from "@/models/types";
+import { useGeolocation } from "@/hooks/use-geolocation";
 
 const AmbulanceDashboard: React.FC = () => {
   const [patientName, setPatientName] = useState("");
@@ -39,10 +39,14 @@ const AmbulanceDashboard: React.FC = () => {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   
+  const [isLocationUpdating, setIsLocationUpdating] = useState(false);
+  const locationUpdateIntervalRef = useRef<number | null>(null);
+  
+  const geolocation = useGeolocation({ enableHighAccuracy: true }, isLocationUpdating ? 4000 : 0);
+  
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Fetch active case for the current ambulance driver
   useEffect(() => {
     if (!user) return;
     
@@ -57,7 +61,6 @@ const AmbulanceDashboard: React.FC = () => {
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
           if (!snapshot.empty) {
-            // Get the first active case
             const caseDoc = snapshot.docs[0];
             const caseData = caseDoc.data();
             
@@ -96,7 +99,6 @@ const AmbulanceDashboard: React.FC = () => {
     fetchActiveCase();
   }, [user, toast]);
   
-  // Fetch hospitals
   const fetchHospitals = async () => {
     try {
       const hospitalsRef = collection(db, "hospitals");
@@ -136,7 +138,6 @@ const AmbulanceDashboard: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // Create new emergency case in Firestore
       const caseRef = await addDoc(collection(db, "emergencyCases"), {
         patientName,
         age: parseInt(patientAge),
@@ -154,7 +155,6 @@ const AmbulanceDashboard: React.FC = () => {
         updatedAt: serverTimestamp(),
       });
       
-      // Create or update ambulance location
       await addDoc(collection(db, "ambulances"), {
         id: user.id,
         driverName: user.name,
@@ -163,9 +163,9 @@ const AmbulanceDashboard: React.FC = () => {
         severity,
         caseId: caseRef.id,
         location: {
-          latitude: 37.7749, // Default coordinates - in a real app, use device GPS
+          latitude: 37.7749,
           longitude: -122.4194,
-          address: "Current Location", // In a real app, reverse geocode the coordinates
+          address: "Current Location",
         },
         lastUpdated: serverTimestamp(),
       });
@@ -175,11 +175,9 @@ const AmbulanceDashboard: React.FC = () => {
         description: "Your case has been sent to nearby hospitals.",
       });
       
-      // Fetch hospitals for selection
       fetchHospitals();
       setShowHospitals(true);
       
-      // Reset form
       setPatientName("");
       setPatientAge("");
       setPatientGender("");
@@ -201,7 +199,6 @@ const AmbulanceDashboard: React.FC = () => {
     if (!activeCase) return;
     
     try {
-      // Update the case in Firestore
       const caseRef = doc(db, "emergencyCases", activeCase.id);
       await updateDoc(caseRef, {
         status: "accepted",
@@ -230,14 +227,19 @@ const AmbulanceDashboard: React.FC = () => {
     if (!activeCase) return;
     
     try {
-      // Update the case in Firestore
       const caseRef = doc(db, "emergencyCases", activeCase.id);
       await updateDoc(caseRef, {
         status: "en-route",
         updatedAt: serverTimestamp(),
+        ambulanceLocation: geolocation.latitude && geolocation.longitude ? {
+          latitude: geolocation.latitude,
+          longitude: geolocation.longitude,
+          accuracy: geolocation.accuracy,
+          timestamp: geolocation.timestamp,
+          updatedAt: serverTimestamp()
+        } : null
       });
       
-      // Update ambulance status
       const ambulancesRef = collection(db, "ambulances");
       const q = query(ambulancesRef, where("id", "==", user?.id));
       const snapshot = await getDocs(q);
@@ -246,13 +248,29 @@ const AmbulanceDashboard: React.FC = () => {
         const ambulanceDoc = snapshot.docs[0];
         await updateDoc(doc(db, "ambulances", ambulanceDoc.id), {
           status: "en-route",
+          location: geolocation.latitude && geolocation.longitude ? {
+            latitude: geolocation.latitude,
+            longitude: geolocation.longitude,
+            address: "En route to hospital",
+          } : {
+            latitude: 37.7749,
+            longitude: -122.4194,
+            address: "En route to hospital",
+          },
+          destination: {
+            name: activeCase.hospital?.name || "Hospital",
+            address: activeCase.hospital?.address || "",
+            eta: "Calculating...",
+          },
           lastUpdated: serverTimestamp(),
         });
       }
       
+      setIsLocationUpdating(true);
+      
       toast({
         title: "Status updated",
-        description: "You are now en route to the hospital.",
+        description: "You are now en route to the hospital. Your location will be shared with the hospital and police.",
       });
     } catch (error) {
       console.error("Error marking en-route:", error);
@@ -268,14 +286,21 @@ const AmbulanceDashboard: React.FC = () => {
     if (!activeCase) return;
     
     try {
-      // Update the case in Firestore
+      setIsLocationUpdating(false);
+      
       const caseRef = doc(db, "emergencyCases", activeCase.id);
       await updateDoc(caseRef, {
         status: "arrived",
         updatedAt: serverTimestamp(),
+        finalArrivalTime: serverTimestamp(),
+        finalLocation: geolocation.latitude && geolocation.longitude ? {
+          latitude: geolocation.latitude,
+          longitude: geolocation.longitude,
+          accuracy: geolocation.accuracy,
+          timestamp: geolocation.timestamp
+        } : null
       });
       
-      // Update ambulance status
       const ambulancesRef = collection(db, "ambulances");
       const q = query(ambulancesRef, where("id", "==", user?.id));
       const snapshot = await getDocs(q);
@@ -288,15 +313,23 @@ const AmbulanceDashboard: React.FC = () => {
           severity: null,
           destination: null,
           lastUpdated: serverTimestamp(),
+          location: geolocation.latitude && geolocation.longitude ? {
+            latitude: geolocation.latitude,
+            longitude: geolocation.longitude,
+            address: activeCase.hospital?.address || "Hospital",
+          } : {
+            latitude: 37.7749,
+            longitude: -122.4194,
+            address: activeCase.hospital?.address || "Hospital",
+          },
         });
       }
       
       toast({
         title: "Arrived at hospital",
-        description: "You have arrived at the hospital with the patient.",
+        description: "You have arrived at the hospital with the patient. Location tracking has been stopped.",
       });
       
-      // After 5 seconds, mark the case as completed
       setTimeout(async () => {
         try {
           await updateDoc(caseRef, {
@@ -337,6 +370,47 @@ const AmbulanceDashboard: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (isLocationUpdating && activeCase && geolocation.latitude && geolocation.longitude) {
+      const updateAmbulanceLocation = async () => {
+        try {
+          const caseRef = doc(db, "emergencyCases", activeCase.id);
+          await updateDoc(caseRef, {
+            "ambulanceLocation": {
+              latitude: geolocation.latitude,
+              longitude: geolocation.longitude,
+              accuracy: geolocation.accuracy,
+              timestamp: geolocation.timestamp,
+              updatedAt: serverTimestamp()
+            }
+          });
+          
+          const ambulancesRef = collection(db, "ambulances");
+          const q = query(ambulancesRef, where("id", "==", user?.id));
+          const snapshot = await getDocs(q);
+          
+          if (!snapshot.empty) {
+            const ambulanceDoc = snapshot.docs[0];
+            await updateDoc(doc(db, "ambulances", ambulanceDoc.id), {
+              location: {
+                latitude: geolocation.latitude,
+                longitude: geolocation.longitude,
+                address: "En route to hospital",
+              },
+              lastUpdated: serverTimestamp(),
+            });
+          }
+          
+          console.log("Updated ambulance location:", { lat: geolocation.latitude, lng: geolocation.longitude });
+        } catch (error) {
+          console.error("Error updating location:", error);
+        }
+      };
+      
+      updateAmbulanceLocation();
+    }
+  }, [isLocationUpdating, activeCase, geolocation.latitude, geolocation.longitude, geolocation.timestamp, user?.id]);
+  
   return (
     <DashboardLayout title="Ambulance Dashboard" role="ambulance">
       <div className="space-y-8 p-2 pb-8">

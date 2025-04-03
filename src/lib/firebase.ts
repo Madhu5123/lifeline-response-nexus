@@ -38,6 +38,31 @@ export const enableOfflinePersistence = async () => {
   }
 };
 
+// Check and request geolocation permissions
+export const checkGeolocationPermission = async (): Promise<boolean> => {
+  if (!navigator.geolocation) {
+    console.warn("Geolocation is not supported by this browser");
+    return false;
+  }
+  
+  try {
+    // Try to get the current position once to check permissions
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        () => resolve(true), // Permission granted
+        (error) => {
+          console.error("Geolocation permission error:", error);
+          resolve(false); // Permission denied
+        },
+        { timeout: 10000 }
+      );
+    });
+  } catch (error) {
+    console.error("Error checking geolocation permission:", error);
+    return false;
+  }
+};
+
 // Clear persistence cache - can be used to solve data sync issues
 export const clearPersistenceCache = async () => {
   try {
@@ -57,6 +82,10 @@ export const initializeFirebase = async (isMobile: boolean) => {
     if (isMobile) {
       await enableOfflinePersistence();
     }
+    
+    // Check geolocation permissions
+    const geolocationPermission = await checkGeolocationPermission();
+    console.log("Geolocation permission:", geolocationPermission ? "granted" : "denied");
     
     // Setup listeners for network connectivity issues
     window.addEventListener('online', () => {
