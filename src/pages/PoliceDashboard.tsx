@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,23 +17,16 @@ import { Ambulance } from "@/models/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { calculateDistance } from "@/utils/distance";
-import GoogleMapsApiKeyInput from "@/components/GoogleMapsApiKeyInput";
-import { isGoogleMapsApiKeySet, getGoogleMapsApiKey } from "@/utils/maps";
 
 const NEARBY_THRESHOLD = 5;
 
 const PoliceDashboard: React.FC = () => {
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const { user } = useAuth();
   
   const policeLocation = useGeolocation({ enableHighAccuracy: true }, 10000);
   
-  useEffect(() => {
-    setApiKeyConfigured(isGoogleMapsApiKeySet());
-  }, []);
-
   useEffect(() => {
     const fetchAmbulances = () => {
       try {
@@ -133,35 +126,6 @@ const PoliceDashboard: React.FC = () => {
     }
   };
 
-  const handleApiKeySet = () => {
-    setApiKeyConfigured(true);
-  };
-
-  const renderGoogleMap = () => {
-    if (!apiKeyConfigured) {
-      return (
-        <GoogleMapsApiKeyInput onKeySet={handleApiKeySet} />
-      );
-    }
-
-    return (
-      <div className="bg-gray-100 border rounded-md p-4 text-center">
-        <p>Google Maps would be displayed here using the API key:</p>
-        <p className="text-xs text-gray-500 mt-2 break-all">
-          {getGoogleMapsApiKey().substring(0, 8)}...{getGoogleMapsApiKey().substring(getGoogleMapsApiKey().length - 4)}
-        </p>
-        <p className="text-sm mt-4">
-          Ambulances would be shown as markers on the map with their real-time locations
-        </p>
-        {policeLocation.latitude && policeLocation.longitude && (
-          <p className="text-xs mt-2 text-green-600">
-            Your position: {policeLocation.latitude.toFixed(6)}, {policeLocation.longitude.toFixed(6)}
-          </p>
-        )}
-      </div>
-    );
-  };
-
   return (
     <DashboardLayout title="Police Dashboard" role="police">
       <div className="space-y-6">
@@ -231,8 +195,22 @@ const PoliceDashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="aspect-video flex items-center justify-center border-t">
-                  {renderGoogleMap()}
+                <div className="aspect-video bg-gray-100 flex items-center justify-center border-t">
+                  <div className="text-center p-8">
+                    <p className="text-gray-500 mb-4">Map visualization would be implemented here</p>
+                    <p className="text-sm text-gray-400">
+                      This would display a Google Maps interface showing ambulance positions and routes
+                    </p>
+                    {policeLocation.latitude && policeLocation.longitude ? (
+                      <p className="text-xs mt-4 text-green-600">
+                        Your position: {policeLocation.latitude.toFixed(6)}, {policeLocation.longitude.toFixed(6)}
+                      </p>
+                    ) : (
+                      <p className="text-xs mt-4 text-orange-500">
+                        Waiting for your location...
+                      </p>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
