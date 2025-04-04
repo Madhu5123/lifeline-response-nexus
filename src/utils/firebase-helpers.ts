@@ -183,5 +183,6 @@ export const ADMIN_PASSWORD = "adminlifeline";
 
 // Check if credentials are admin credentials
 export const isAdminCredentials = (email: string, password: string): boolean => {
+  console.log("Checking admin credentials:", email === ADMIN_EMAIL && password === ADMIN_PASSWORD);
   return email === ADMIN_EMAIL && password === ADMIN_PASSWORD;
 };

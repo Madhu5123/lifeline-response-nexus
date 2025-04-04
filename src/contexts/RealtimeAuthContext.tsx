@@ -67,9 +67,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
+  console.log("AuthProvider rendered, current user state:", { user, isAuthenticated: !!user && (user.status === "approved" || user.role === "admin") });
+
   // Effect for Firebase auth state
   useEffect(() => {
+    console.log("Setting up Firebase auth state listener");
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("Firebase auth state changed:", firebaseUser?.email);
       setCurrentUser(firebaseUser);
       
       if (firebaseUser) {
@@ -79,6 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
               const userData = snapshot.val();
+              console.log("User data from Firebase:", userData);
               setUser({
                 id: firebaseUser.uid,
                 email: firebaseUser.email || "",
@@ -142,6 +147,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
+      console.log("Login attempt:", email);
       // Check if using admin credentials
       if (isAdminCredentials(email, password)) {
         console.log("Admin login detected");
@@ -151,8 +157,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // Regular Firebase auth login
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("Firebase login successful:", userCredential.user.email);
+      
+      // For regular users, we'll get their data through the auth state change listener
     } catch (error: any) {
+      console.error("Login error:", error);
       // Handle specific Firebase auth errors
       let errorMessage = "Login failed. Please check your credentials.";
       

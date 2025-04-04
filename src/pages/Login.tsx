@@ -20,12 +20,31 @@ const Login: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
+  // Add console logs to debug navigation
   useEffect(() => {
+    console.log("Login component - Auth state changed:", { isAuthenticated, user });
+    
     if (isAuthenticated && user) {
-      if (user.role === "admin") navigate("/admin");
-      else if (user.role === "ambulance") navigate("/ambulance");
-      else if (user.role === "hospital") navigate("/hospital");
-      else if (user.role === "police") navigate("/police");
+      console.log("Attempting to navigate to role dashboard:", user.role);
+      
+      if (user.role === "admin") {
+        console.log("Navigating to admin dashboard");
+        navigate("/admin");
+      }
+      else if (user.role === "ambulance") {
+        console.log("Navigating to ambulance dashboard");
+        navigate("/ambulance");
+      }
+      else if (user.role === "hospital") {
+        console.log("Navigating to hospital dashboard");
+        navigate("/hospital");
+      }
+      else if (user.role === "police") {
+        console.log("Navigating to police dashboard");
+        navigate("/police");
+      } else {
+        console.log("No valid role found for navigation");
+      }
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -35,6 +54,7 @@ const Login: React.FC = () => {
     setIsLoading(true);
     
     try {
+      console.log("Attempting login with:", email);
       await login(email, password);
       
       // Show different messages for admin vs regular users
