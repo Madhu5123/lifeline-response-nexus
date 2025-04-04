@@ -75,21 +75,30 @@ export const clearPersistenceCache = async () => {
 // Helper to check Firebase connection status
 export const checkFirebaseConnection = () => {
   const connectedRef = ref(db, '.info/connected');
+  
   return new Promise<boolean>((resolve) => {
-    const unsubscribe = onValue(connectedRef, (snapshot) => {
+    // Define unsubscribe outside the callback to avoid the reference error
+    let unsubscribe: () => void;
+    
+    // Set a timeout in case the connection check takes too long
+    const timeout = setTimeout(() => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      resolve(false);
+    }, 5000);
+    
+    // Now assign the unsubscribe function
+    unsubscribe = onValue(connectedRef, (snapshot) => {
+      clearTimeout(timeout);
       const connected = snapshot.val() === true;
       unsubscribe();
       resolve(connected);
     }, (error) => {
+      clearTimeout(timeout);
       console.error("Error checking connection:", error);
       resolve(false);
     });
-    
-    // Set a timeout in case the connection check takes too long
-    setTimeout(() => {
-      unsubscribe();
-      resolve(false);
-    }, 5000);
   });
 };
 

@@ -1,9 +1,8 @@
-
 import React, { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, LogOut, Menu, X, Home, Users, Clipboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth, UserRole } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +11,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 interface DashboardLayoutProps {
   children: ReactNode;
   title: string;
-  role: UserRole;
+  role: string;
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ 
@@ -30,7 +29,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     navigate("/login");
   };
 
-  // Get nav items based on role
   const getNavItems = () => {
     switch(role) {
       case "admin":
@@ -61,7 +59,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const navItems = getNavItems();
 
-  // Handle click outside to close the sidebar on mobile
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (sidebarOpen && isMobile) {
@@ -90,7 +87,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Mobile Header */}
       <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow-sm z-30 rounded-b-xl">
         <div className="flex items-center">
           <Button
@@ -114,7 +110,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
       </header>
 
-      {/* Mobile sidebar overlay */}
       <div 
         className={cn(
           "fixed inset-0 bg-gray-600 bg-opacity-75 z-40 transition-opacity duration-300 lg:hidden",
@@ -123,7 +118,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         onClick={() => setSidebarOpen(false)}
       ></div>
 
-      {/* Mobile Sidebar */}
       <div 
         id="mobile-sidebar"
         className={cn(
@@ -189,7 +183,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
       </div>
 
-      {/* Desktop Sidebar */}
       <div className="hidden lg:flex flex-col w-64 fixed h-full">
         <div className={cn("p-6 rounded-br-3xl", getRoleBgColor())}>
           <h1 className="text-xl font-bold text-white">Lifeline AI</h1>
@@ -237,7 +230,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-auto pt-0 lg:pt-0 lg:pl-64">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 pt-4">
           <div className="bg-transparent">

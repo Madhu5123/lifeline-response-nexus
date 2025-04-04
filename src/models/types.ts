@@ -1,89 +1,124 @@
 
-// Common Types for the application
-
-// User related types
+// User roles 
 export type UserRole = "admin" | "ambulance" | "hospital" | "police" | "unverified";
 
+// User status
+export type UserStatus = "pending" | "approved" | "rejected";
+
+// User details interface
 export interface UserDetails {
   organization?: string;
   address?: string;
   phone?: string;
   licenseNumber?: string;
   position?: string;
+  imageUrls?: Record<string, string>;
   [key: string]: any;
 }
 
+// User interface
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  status: "pending" | "approved" | "rejected";
+  status: UserStatus;
   details?: UserDetails;
 }
 
-// Emergency Case related types
-export type CaseSeverity = "critical" | "serious" | "stable";
-export type CaseStatus = "pending" | "accepted" | "en-route" | "arrived" | "completed";
+// Emergency case types
+export type CaseStatus = "pending" | "accepted" | "completed" | "canceled";
+export type CasePriority = "low" | "medium" | "high" | "critical";
+export type CaseType = "accident" | "fire" | "medical" | "crime" | "other";
 
-export interface Location {
-  latitude: number;
-  longitude: number;
-  address: string;
-}
-
-export interface Destination {
-  name: string;
-  address: string;
-  eta: string;
-}
-
-export interface AmbulanceInfo {
-  id: string;
-  driverName: string;
-  vehicleNumber: string;
-  estimatedArrival: string;
-  location?: Location;
-}
-
-export interface Hospital {
-  id: string;
-  name: string;
-  address: string;
-  contact: string;
-  distance: string;
-  beds: number;
-  location?: Location;
-}
-
+// Emergency case interface
 export interface EmergencyCase {
   id: string;
-  patientName: string;
-  age: number;
-  gender: string;
-  symptoms: string;
-  severity: CaseSeverity;
+  type: CaseType;
+  priority: CasePriority;
   status: CaseStatus;
-  ambulanceId?: string;
-  ambulanceInfo?: AmbulanceInfo;
+  location: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
+  description: string;
+  reportedBy: {
+    id: string;
+    name: string;
+    role?: UserRole;
+  };
+  assignedTo?: {
+    id: string;
+    name: string;
+    role: UserRole;
+  };
   hospitalId?: string;
-  hospital?: Hospital;
-  location?: Location;
-  createdAt: Date;
-  updatedAt?: Date;
+  policeId?: string;
+  ambulanceId?: string;
+  createdAt: string;
+  updatedAt: string;
+  images?: string[];
 }
 
-// Ambulance tracking related types
-export interface Ambulance {
+// Hospital interface
+export interface Hospital extends User {
+  details: UserDetails & {
+    beds: {
+      total: number;
+      available: number;
+    };
+    specialties: string[];
+    emergencyServices: boolean;
+    contactInfo: {
+      phone: string;
+      email: string;
+    };
+  };
+}
+
+// Ambulance interface
+export interface Ambulance extends User {
+  details: UserDetails & {
+    vehicleId: string;
+    vehicleType: string;
+    capacity: number;
+    equipment: string[];
+    status: "available" | "busy" | "offline";
+    location?: {
+      latitude: number;
+      longitude: number;
+      lastUpdated: string;
+    };
+  };
+}
+
+// Police interface
+export interface Police extends User {
+  details: UserDetails & {
+    badgeNumber: string;
+    department: string;
+    rank: string;
+    status: "on-duty" | "off-duty";
+    location?: {
+      latitude: number;
+      longitude: number;
+      lastUpdated: string;
+    };
+  };
+}
+
+// Notification interface
+export interface Notification {
   id: string;
-  driverName: string;
-  vehicleNumber: string;
-  severity?: CaseSeverity;
-  status: "en-route" | "idle";
-  location: Location;
-  destination?: Destination;
-  caseId?: string;
-  isNearby?: boolean;
-  distance?: string; // Added distance property
-  lastUpdated: Date;
+  userId: string;
+  title: string;
+  message: string;
+  type: "alert" | "info" | "success" | "warning" | "error";
+  read: boolean;
+  createdAt: string;
+  relatedTo?: {
+    type: "case" | "user" | "system";
+    id: string;
+  };
 }

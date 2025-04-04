@@ -5,7 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./contexts/RealtimeAuthContext";
+import { AuthProvider, useAuth } from "./contexts/RealtimeAuthContext";
 import SplashScreen from "./components/SplashScreen";
 import { initializeFirebase } from "./lib/firebase";
 import { useToast } from "@/hooks/use-toast";
@@ -62,9 +62,6 @@ const ProtectedRoute = ({
 
   return <>{children}</>;
 };
-
-// Add the missing import for useAuth
-import { useAuth } from "./contexts/RealtimeAuthContext";
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(true);

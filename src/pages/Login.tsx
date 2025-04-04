@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Mail, Lock } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 
@@ -18,10 +18,8 @@ const Login: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Redirect based on role
       if (user.role === "admin") navigate("/admin");
       else if (user.role === "ambulance") navigate("/ambulance");
       else if (user.role === "hospital") navigate("/hospital");
@@ -50,7 +48,6 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
-      {/* Header */}
       <div className="pt-16 pb-8 px-6">
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
