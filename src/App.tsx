@@ -5,7 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/RealtimeAuthContext"; // Updated import
+import { AuthProvider } from "./contexts/RealtimeAuthContext";
 import SplashScreen from "./components/SplashScreen";
 import { initializeFirebase } from "./lib/firebase";
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +63,9 @@ const ProtectedRoute = ({
   return <>{children}</>;
 };
 
+// Add the missing import for useAuth
+import { useAuth } from "./contexts/RealtimeAuthContext";
+
 const App = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [firebaseInitialized, setFirebaseInitialized] = useState(false);
@@ -72,11 +75,14 @@ const App = () => {
   // Initialize Firebase with proper configuration
   useEffect(() => {
     const setupFirebase = async () => {
+      console.log("Setting up Firebase...");
       const success = await initializeFirebase(isMobile);
       
       if (success) {
+        console.log("Firebase initialization successful");
         setFirebaseInitialized(true);
       } else {
+        console.error("Firebase initialization failed");
         toast({
           title: "Connection Issue",
           description: "There was a problem connecting to the server. Some features may not work correctly.",

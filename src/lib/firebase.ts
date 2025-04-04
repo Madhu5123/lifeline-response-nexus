@@ -4,7 +4,6 @@ import { getDatabase, ref, set, get, onValue, off, serverTimestamp, connectDatab
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDoaSY-n_ebkRccENDb9HHubXQyQtIxfvI",
   authDomain: "lifeline-ai-485e3.firebaseapp.com",
@@ -13,16 +12,17 @@ const firebaseConfig = {
   messagingSenderId: "114223980407",
   appId: "1:114223980407:web:732e297a81e32a9efbcb72",
   measurementId: "G-FDKCQ3TZD7",
-  databaseURL: "https://lifeline-ai-485e3-default-rtdb.firebaseio.com" // Add the Realtime Database URL
+  databaseURL: "https://lifeline-ai-485e3-default-rtdb.firebaseio.com" // Ensure databaseURL is correctly set
 };
 
-// Initialize Firebase
+// Initialize Firebase first
 const app = initializeApp(firebaseConfig);
-export const db = getDatabase(app);
+
+// Then initialize services
 export const auth = getAuth(app);
+export const db = getDatabase(app);
 
 // Enable offline persistence for mobile apps
-// This will be called in the main component after checking if we're on a mobile device
 export const enableOfflinePersistence = async () => {
   try {
     // Realtime Database has built-in offline persistence
@@ -96,6 +96,15 @@ export const checkFirebaseConnection = () => {
 // Helper to initialize Firebase in App.tsx with proper error handling
 export const initializeFirebase = async (isMobile: boolean) => {
   try {
+    console.log("Initializing Firebase...");
+    console.log("Firebase config:", firebaseConfig);
+    
+    // Check if database was initialized correctly
+    if (!db) {
+      console.error("Database initialization failed");
+      return false;
+    }
+    
     // Enable offline persistence (automatic in Realtime Database)
     if (isMobile) {
       await enableOfflinePersistence();
