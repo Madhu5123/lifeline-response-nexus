@@ -109,7 +109,6 @@ export const checkFirebaseConnection = () => {
 export const initializeFirebase = async (isMobile: boolean) => {
   try {
     console.log("Initializing Firebase...");
-    console.log("Firebase config:", firebaseConfig);
     
     // Check if database was initialized correctly
     if (!db) {
@@ -130,6 +129,9 @@ export const initializeFirebase = async (isMobile: boolean) => {
     const isConnected = await checkFirebaseConnection();
     console.log("Firebase connection:", isConnected ? "connected" : "disconnected");
     
+    // Even if Firebase appears disconnected, we'll continue with initialization
+    // This allows the app to start in offline mode and sync when connection is restored
+    
     // Setup listeners for network connectivity issues
     window.addEventListener('online', () => {
       console.log('App is online. Reconnecting to Firebase...');
@@ -139,7 +141,8 @@ export const initializeFirebase = async (isMobile: boolean) => {
       console.log('App is offline. Some changes may be cached locally.');
     });
     
-    return isConnected;
+    // Return true even if disconnected to allow app to function in offline mode
+    return true;
   } catch (error) {
     console.error("Error initializing Firebase:", error);
     return false;
