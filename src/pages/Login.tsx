@@ -8,6 +8,7 @@ import { AlertCircle, Mail, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { ADMIN_EMAIL } from "@/utils/firebase-helpers";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -35,10 +36,19 @@ const Login: React.FC = () => {
     
     try {
       await login(email, password);
-      toast({
-        title: "Login successful",
-        description: "Welcome to Lifeline AI",
-      });
+      
+      // Show different messages for admin vs regular users
+      if (email === ADMIN_EMAIL) {
+        toast({
+          title: "Admin Login successful",
+          description: "Welcome to Lifeline AI Admin Panel",
+        });
+      } else {
+        toast({
+          title: "Login successful",
+          description: "Welcome to Lifeline AI",
+        });
+      }
     } catch (error: any) {
       setError(error.message || "Failed to login");
       console.error("Login error:", error);
