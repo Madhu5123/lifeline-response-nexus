@@ -1,6 +1,13 @@
-
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence, clearIndexedDbPersistence, connectFirestoreEmulator } from "firebase/firestore";
+import { 
+  getFirestore, 
+  enableIndexedDbPersistence, 
+  clearIndexedDbPersistence, 
+  connectFirestoreEmulator,
+  collection,
+  doc,
+  onSnapshot
+} from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Your web app's Firebase configuration
@@ -100,7 +107,13 @@ export const retryOperation = async (operation: () => Promise<any>, maxRetries =
 // Check Firebase connection status
 export const checkFirebaseConnection = (): Promise<boolean> => {
   return new Promise((resolve) => {
-    const unsubscribe = db.collection("__connectionTest__").doc("__connectionTest__").onSnapshot(
+    // Create a reference to a test collection and document
+    const testCollectionRef = collection(db, "__connectionTest__");
+    const testDocRef = doc(testCollectionRef, "__connectionTest__");
+    
+    // Use onSnapshot to check connection
+    const unsubscribe = onSnapshot(
+      testDocRef,
       () => {
         unsubscribe();
         resolve(true);
@@ -166,4 +179,3 @@ export const firebaseWrite = async (writeOperation: () => Promise<any>): Promise
     return false;
   }
 };
-
