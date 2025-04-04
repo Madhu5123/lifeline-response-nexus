@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,26 +58,37 @@ const PoliceDashboard: React.FC = () => {
                 (typeof data.lastUpdated === 'string' ? new Date(data.lastUpdated) : new Date(data.lastUpdated)) : 
                 new Date();
               
+              // Create a properly typed Ambulance object
               ambulancesData.push({
                 id: childSnapshot.key || data.id,
-                driverName: data.driverName,
-                vehicleNumber: data.vehicleNumber,
-                severity: data.severity,
-                status: data.status,
-                location: data.location,
-                destination: data.destination,
-                caseId: data.caseId,
-                isNearby,
-                lastUpdated: lastUpdated,
-                distance: policeLocation.latitude && policeLocation.longitude ? 
-                  calculateDistance(
-                    policeLocation.latitude,
-                    policeLocation.longitude,
-                    data.location.latitude,
-                    data.location.longitude
-                  ).toFixed(1) + " km" : 
-                  "Unknown",
-              } as Ambulance);
+                name: data.name || "",
+                email: data.email || "",
+                role: "ambulance",
+                status: "approved",
+                details: {
+                  vehicleId: data.vehicleId || "",
+                  vehicleType: data.vehicleType || "Standard Ambulance",
+                  capacity: data.capacity || 2,
+                  equipment: data.equipment || [],
+                  status: data.status || "available",
+                  driverName: data.driverName,
+                  vehicleNumber: data.vehicleNumber,
+                  severity: data.severity,
+                  location: data.location,
+                  destination: data.destination,
+                  caseId: data.caseId,
+                  isNearby: isNearby,
+                  lastUpdated: lastUpdated,
+                  distance: policeLocation.latitude && policeLocation.longitude ? 
+                    calculateDistance(
+                      policeLocation.latitude,
+                      policeLocation.longitude,
+                      data.location.latitude,
+                      data.location.longitude
+                    ).toFixed(1) + " km" : 
+                    "Unknown",
+                }
+              });
             }
           });
           
@@ -139,7 +151,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {ambulances.filter(a => a.status === "en-route").length}
+                {ambulances.filter(a => a.details.status === "en-route").length}
               </CardTitle>
               <CardDescription>Active Ambulances</CardDescription>
             </CardHeader>
@@ -151,7 +163,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {ambulances.filter(a => a.isNearby).length}
+                {ambulances.filter(a => a.details.isNearby).length}
               </CardTitle>
               <CardDescription>Nearby Ambulances</CardDescription>
             </CardHeader>
@@ -163,7 +175,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {ambulances.filter(a => a.severity === "critical").length}
+                {ambulances.filter(a => a.details.severity === "critical").length}
               </CardTitle>
               <CardDescription>Critical Cases</CardDescription>
             </CardHeader>
@@ -175,7 +187,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {ambulances.filter(a => a.status === "idle").length}
+                {ambulances.filter(a => a.details.status === "idle").length}
               </CardTitle>
               <CardDescription>Available Units</CardDescription>
             </CardHeader>
@@ -227,7 +239,7 @@ const PoliceDashboard: React.FC = () => {
                   <p>Loading ambulance data...</p>
                 </CardContent>
               </Card>
-            ) : ambulances.filter(a => a.isNearby).length > 0 && (
+            ) : ambulances.filter(a => a.details.isNearby).length > 0 && (
               <Card className="border-t-4 border-t-emergency-police">
                 <CardHeader className="bg-blue-50 text-blue-800">
                   <div className="flex items-start gap-2">
@@ -236,24 +248,24 @@ const PoliceDashboard: React.FC = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  {ambulances.filter(a => a.isNearby).map(ambulance => (
+                  {ambulances.filter(a => a.details.isNearby).map(ambulance => (
                     <div key={ambulance.id} className="space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <h3 className="font-semibold">{ambulance.vehicleNumber}</h3>
-                          <p className="text-sm">Driver: {ambulance.driverName}</p>
+                          <h3 className="font-semibold">{ambulance.details.vehicleNumber}</h3>
+                          <p className="text-sm">Driver: {ambulance.details.driverName}</p>
                         </div>
                         <div className="flex gap-2">
-                          {ambulance.severity && (
-                            <Badge className={getSeverityBadgeClass(ambulance.severity)}>
-                              {ambulance.severity.charAt(0).toUpperCase() + ambulance.severity.slice(1)}
+                          {ambulance.details.severity && (
+                            <Badge className={getSeverityBadgeClass(ambulance.details.severity)}>
+                              {ambulance.details.severity.charAt(0).toUpperCase() + ambulance.details.severity.slice(1)}
                             </Badge>
                           )}
-                          <Badge className={getStatusBadgeClass(ambulance.status)}>
-                            {ambulance.status === "en-route" ? "En Route" : "Idle"}
+                          <Badge className={getStatusBadgeClass(ambulance.details.status)}>
+                            {ambulance.details.status === "en-route" ? "En Route" : "Idle"}
                           </Badge>
                           <Badge className="bg-blue-500 text-white">
-                            {ambulance.distance}
+                            {ambulance.details.distance}
                           </Badge>
                         </div>
                       </div>
@@ -261,10 +273,10 @@ const PoliceDashboard: React.FC = () => {
                       <div className="flex items-start gap-1 text-sm text-gray-700">
                         <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                         <div>
-                          <div>Current Location: {ambulance.location.address}</div>
-                          {ambulance.destination && (
+                          <div>Current Location: {ambulance.details.location?.address}</div>
+                          {ambulance.details.destination && (
                             <div className="text-blue-700">
-                              Destination: {ambulance.destination.name} ({ambulance.destination.eta})
+                              Destination: {ambulance.details.destination.name} ({ambulance.details.destination.eta})
                             </div>
                           )}
                         </div>
@@ -272,7 +284,7 @@ const PoliceDashboard: React.FC = () => {
                       
                       <div className="flex justify-between items-center">
                         <div className="text-xs text-gray-500">
-                          Last updated: {formatTimestamp(ambulance.lastUpdated)}
+                          Last updated: {formatTimestamp(ambulance.details.lastUpdated as Date)}
                         </div>
                         <Button size="sm">Assist</Button>
                       </div>
@@ -291,27 +303,27 @@ const PoliceDashboard: React.FC = () => {
                 </CardContent>
               </Card>
             ) : ambulances.length > 0 ? (
-              ambulances.filter(a => a.isNearby).map(ambulance => (
-                <Card key={ambulance.id} className={`border-l-4 ${ambulance.isNearby ? "border-l-blue-500" : ""}`}>
+              ambulances.filter(a => a.details.isNearby).map(ambulance => (
+                <Card key={ambulance.id} className={`border-l-4 ${ambulance.details.isNearby ? "border-l-blue-500" : ""}`}>
                   <CardHeader>
                     <div className="flex flex-wrap justify-between items-start gap-2">
                       <div>
-                        <CardTitle>{ambulance.vehicleNumber}</CardTitle>
+                        <CardTitle>{ambulance.details.vehicleNumber}</CardTitle>
                         <CardDescription>
-                          Driver: {ambulance.driverName}
+                          Driver: {ambulance.details.driverName}
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
-                        {ambulance.isNearby && (
-                          <Badge className="bg-blue-500 text-white">Nearby ({ambulance.distance})</Badge>
+                        {ambulance.details.isNearby && (
+                          <Badge className="bg-blue-500 text-white">Nearby ({ambulance.details.distance})</Badge>
                         )}
-                        {ambulance.severity && (
-                          <Badge className={getSeverityBadgeClass(ambulance.severity)}>
-                            {ambulance.severity.charAt(0).toUpperCase() + ambulance.severity.slice(1)}
+                        {ambulance.details.severity && (
+                          <Badge className={getSeverityBadgeClass(ambulance.details.severity)}>
+                            {ambulance.details.severity.charAt(0).toUpperCase() + ambulance.details.severity.slice(1)}
                           </Badge>
                         )}
-                        <Badge className={getStatusBadgeClass(ambulance.status)}>
-                          {ambulance.status === "en-route" ? "En Route" : "Idle"}
+                        <Badge className={getStatusBadgeClass(ambulance.details.status)}>
+                          {ambulance.details.status === "en-route" ? "En Route" : "Idle"}
                         </Badge>
                       </div>
                     </div>
@@ -320,17 +332,17 @@ const PoliceDashboard: React.FC = () => {
                     <div className="flex items-start gap-1 text-gray-700">
                       <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <div>
-                        <div>Current Location: {ambulance.location.address}</div>
-                        {ambulance.destination && (
+                        <div>Current Location: {ambulance.details.location?.address}</div>
+                        {ambulance.details.destination && (
                           <div className="text-blue-700">
-                            Destination: {ambulance.destination.name} ({ambulance.destination.eta})
+                            Destination: {ambulance.details.destination.name} ({ambulance.details.destination.eta})
                           </div>
                         )}
                       </div>
                     </div>
                     
                     <div className="text-xs text-gray-500">
-                      Last updated: {formatTimestamp(ambulance.lastUpdated)}
+                      Last updated: {formatTimestamp(ambulance.details.lastUpdated as Date)}
                     </div>
                   </CardContent>
                 </Card>

@@ -77,28 +77,31 @@ export const checkFirebaseConnection = () => {
   const connectedRef = ref(db, '.info/connected');
   
   return new Promise<boolean>((resolve) => {
-    // Define unsubscribe outside the callback to avoid the reference error
-    let unsubscribe: () => void;
-    
     // Set a timeout in case the connection check takes too long
     const timeout = setTimeout(() => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
       resolve(false);
     }, 5000);
     
-    // Now assign the unsubscribe function
-    unsubscribe = onValue(connectedRef, (snapshot) => {
+    // Add onValue listener
+    const handleValue = (snapshot: any) => {
       clearTimeout(timeout);
       const connected = snapshot.val() === true;
-      unsubscribe();
+      // Remove listener
+      off(connectedRef, 'value', handleValue);
       resolve(connected);
-    }, (error) => {
+    };
+    
+    // Add error handler
+    const handleError = (error: any) => {
       clearTimeout(timeout);
       console.error("Error checking connection:", error);
+      // Remove listener
+      off(connectedRef, 'value', handleValue);
       resolve(false);
-    });
+    };
+    
+    // Attach the listener
+    onValue(connectedRef, handleValue, handleError);
   });
 };
 

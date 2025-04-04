@@ -8,16 +8,18 @@ import {
   User as FirebaseUser
 } from "firebase/auth";
 import { 
-  doc, 
-  getDoc, 
-  setDoc, 
-  serverTimestamp, 
-  collection,
+  ref,
+  set,
+  get,
+  update,
+  remove,
   query,
-  where,
-  getDocs,
-  onSnapshot
-} from "firebase/firestore";
+  orderByChild,
+  equalTo,
+  onValue,
+  off,
+  serverTimestamp
+} from "firebase/database";
 import { auth, db, clearPersistenceCache } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -75,10 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentFirebaseUser) return;
     
     try {
-      const userDoc = await getDoc(doc(db, "users", currentFirebaseUser.uid));
+      const userRef = ref(db, `users/${currentFirebaseUser.uid}`);
+      const snapshot = await get(userRef);
       
-      if (userDoc.exists()) {
-        const userData = userDoc.data() as Omit<User, "id">;
+      if (snapshot.exists()) {
+        const userData = snapshot.val() as Omit<User, "id">;
         
         // Check if user is approved
         if (userData.status !== "approved" && userData.role !== "admin") {
@@ -110,57 +113,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentFirebaseUser(firebaseUser);
       
       if (firebaseUser) {
-        // User is signed in, set up a real-time listener to their Firestore document
+        // User is signed in, set up a real-time listener to their database document
         try {
-          // Use onSnapshot to get real-time updates to the user document
-          const unsubscribeSnapshot = onSnapshot(
-            doc(db, "users", firebaseUser.uid),
-            (docSnapshot) => {
-              if (docSnapshot.exists()) {
-                const userData = docSnapshot.data() as Omit<User, "id">;
-                
-                // Check if user is approved
-                if (userData.status !== "approved" && userData.role !== "admin") {
-                  // User is not approved, sign them out
-                  signOut(auth).then(() => {
-                    setUser(null);
-                    toast({
-                      title: "Account not approved",
-                      description: "Your account is pending approval by an administrator",
-                      variant: "destructive",
-                    });
-                  });
-                } else {
-                  // User is approved, set user data
-                  setUser({
-                    id: firebaseUser.uid,
-                    ...userData,
-                  });
-                }
-              } else {
-                // User document doesn't exist
+          // Use onValue to get real-time updates to the user document
+          const userRef = ref(db, `users/${firebaseUser.uid}`);
+          
+          const handleValueChange = (snapshot: any) => {
+            if (snapshot.exists()) {
+              const userData = snapshot.val() as Omit<User, "id">;
+              
+              // Check if user is approved
+              if (userData.status !== "approved" && userData.role !== "admin") {
+                // User is not approved, sign them out
                 signOut(auth).then(() => {
                   setUser(null);
                   toast({
-                    title: "Account error",
-                    description: "Your account data could not be found",
+                    title: "Account not approved",
+                    description: "Your account is pending approval by an administrator",
                     variant: "destructive",
                   });
                 });
+              } else {
+                // User is approved, set user data
+                setUser({
+                  id: firebaseUser.uid,
+                  ...userData,
+                });
               }
-              setIsLoading(false);
-            },
-            (error) => {
-              console.error("Error listening to user document:", error);
-              setIsLoading(false);
+            } else {
+              // User document doesn't exist
+              signOut(auth).then(() => {
+                setUser(null);
+                toast({
+                  title: "Account error",
+                  description: "Your account data could not be found",
+                  variant: "destructive",
+                });
+              });
             }
-          );
+            setIsLoading(false);
+          };
           
-          // Return a cleanup function to unsubscribe from both listeners
+          const handleError = (error: Error) => {
+            console.error("Error listening to user document:", error);
+            setIsLoading(false);
+          };
+          
+          onValue(userRef, handleValueChange, handleError);
+          
+          // Return a cleanup function to unsubscribe
           return () => {
-            unsubscribeSnapshot();
+            off(userRef);
             unsubscribe();
           };
+          
         } catch (error) {
           console.error("Error fetching user data:", error);
           await signOut(auth);
@@ -228,12 +234,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear any existing persistence cache to ensure fresh data
       await clearPersistenceCache();
       
-      // Check if email already exists in Firestore
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", userData.email));
-      const querySnapshot = await getDocs(q);
+      // Check if email already exists in Realtime Database
+      const usersRef = ref(db, "users");
+      const emailQuery = query(usersRef, orderByChild("email"), equalTo(userData.email));
+      const querySnapshot = await get(emailQuery);
       
-      if (!querySnapshot.empty) {
+      if (querySnapshot.exists()) {
         throw new Error("Email already registered");
       }
       
@@ -244,14 +250,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userData.password
       );
       
-      // Create user document in Firestore
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+      // Create user document in Realtime Database
+      const newUserRef = ref(db, `users/${userCredential.user.uid}`);
+      await set(newUserRef, {
         name: userData.name,
         email: userData.email,
         role: userData.role,
         status: "pending", // All new users start as pending
         details: userData.details || {},
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
       });
       
       // Sign out the user immediately after registration since they need approval

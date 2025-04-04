@@ -27,7 +27,7 @@ export interface User {
 }
 
 // Emergency case types
-export type CaseStatus = "pending" | "accepted" | "completed" | "canceled";
+export type CaseStatus = "pending" | "accepted" | "completed" | "canceled" | "en-route" | "arrived";
 export type CasePriority = "low" | "medium" | "high" | "critical";
 export type CaseType = "accident" | "fire" | "medical" | "crime" | "other";
 
@@ -54,8 +54,24 @@ export interface EmergencyCase {
     role: UserRole;
   };
   hospitalId?: string;
+  hospital?: {
+    id: string;
+    name: string;
+    address: string;
+    contact: string;
+  };
   policeId?: string;
   ambulanceId?: string;
+  ambulanceInfo?: {
+    id: string;
+    driver: string;
+    vehicleNumber: string;
+  };
+  patientName?: string;
+  age?: number;
+  gender?: string;
+  symptoms?: string;
+  severity?: string; // Additional field for severity
   createdAt: string;
   updatedAt: string;
   images?: string[];
@@ -74,6 +90,9 @@ export interface Hospital extends User {
       phone: string;
       email: string;
     };
+    address?: string;
+    contact?: string;
+    distance?: string;
   };
 }
 
@@ -84,12 +103,24 @@ export interface Ambulance extends User {
     vehicleType: string;
     capacity: number;
     equipment: string[];
-    status: "available" | "busy" | "offline";
+    status: "available" | "busy" | "offline" | "en-route" | "idle";
     location?: {
       latitude: number;
       longitude: number;
       lastUpdated: string;
+      address?: string;
     };
+    vehicleNumber?: string;
+    driverName?: string;
+    severity?: string; 
+    destination?: {
+      name: string;
+      eta: string;
+    };
+    caseId?: string;
+    isNearby?: boolean;
+    lastUpdated?: Date;
+    distance?: string;
   };
 }
 
