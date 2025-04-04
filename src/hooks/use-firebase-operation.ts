@@ -34,6 +34,9 @@ export function useFirebaseOperation<T>(
       setStatus('loading');
       setError(null);
       
+      // Add small delay to prevent race conditions
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const result = await retryOperation(
         () => operation(params), 
         maxRetries

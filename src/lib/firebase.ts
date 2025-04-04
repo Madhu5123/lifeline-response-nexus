@@ -6,7 +6,16 @@ import {
   connectFirestoreEmulator,
   collection,
   doc,
-  onSnapshot
+  onSnapshot,
+  setDoc,
+  WriteBatch,
+  writeBatch,
+  updateDoc,
+  getDoc,
+  DocumentReference,
+  query,
+  where,
+  getDocs
 } from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 
@@ -169,13 +178,61 @@ export const initializeFirebase = async (isMobile: boolean) => {
   }
 };
 
-// Function to handle write operations with retry and better error feedback
-export const firebaseWrite = async (writeOperation: () => Promise<any>): Promise<boolean> => {
+// Enhanced function to handle write operations with retry and better error feedback
+export const firebaseWrite = async (writeOperation: () => Promise<any>, maxRetries: number = 5): Promise<boolean> => {
   try {
-    await retryOperation(writeOperation, 3, 1000);
+    await retryOperation(writeOperation, maxRetries, 500);
     return true;
   } catch (error) {
     console.error("Firebase write operation failed after retries:", error);
+    return false;
+  }
+};
+
+// Function to create a transaction for multiple writes
+export const createBatchOperation = (): WriteBatch => {
+  return writeBatch(db);
+};
+
+// Function to commit a batch with retry
+export const commitBatch = async (batch: WriteBatch, maxRetries: number = 5): Promise<boolean> => {
+  return await firebaseWrite(() => batch.commit(), maxRetries);
+};
+
+// Function to update a document with better error handling and retry
+export const updateDocument = async (
+  docRef: DocumentReference,
+  data: any,
+  maxRetries: number = 5
+): Promise<boolean> => {
+  return await firebaseWrite(() => updateDoc(docRef, { ...data, updatedAt: new Date() }), maxRetries);
+};
+
+// Function to force-refresh a document to ensure latest data
+export const forceRefreshDocument = async (docRef: DocumentReference): Promise<any> => {
+  try {
+    const snapshot = await getDoc(docRef);
+    return snapshot.exists() ? snapshot.data() : null;
+  } catch (error) {
+    console.error("Error force-refreshing document:", error);
+    return null;
+  }
+};
+
+// Function to check if a case exists in the hospital's active cases
+export const checkExistingCase = async (hospitalId: string, caseId: string): Promise<boolean> => {
+  try {
+    const casesRef = collection(db, "emergencyCases");
+    const q = query(
+      casesRef,
+      where("hospitalId", "==", hospitalId),
+      where("id", "==", caseId)
+    );
+    
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error("Error checking existing case:", error);
     return false;
   }
 };
