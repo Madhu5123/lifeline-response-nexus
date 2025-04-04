@@ -73,19 +73,33 @@ const App = () => {
   useEffect(() => {
     const setupFirebase = async () => {
       console.log("Setting up Firebase...");
-      const success = await initializeFirebase(isMobile);
-      
-      if (success) {
-        console.log("Firebase initialization successful");
-        setFirebaseInitialized(true);
-      } else {
-        console.error("Firebase initialization failed");
+      try {
+        const success = await initializeFirebase(isMobile);
+        
+        if (success) {
+          console.log("Firebase initialization successful");
+          setFirebaseInitialized(true);
+        } else {
+          console.log("Firebase initialization completed with warnings");
+          toast({
+            title: "Limited Connectivity",
+            description: "Operating in offline mode. Some features may be limited until connection is restored.",
+            variant: "warning",
+            duration: 5000,
+          });
+          // Still proceed even with warnings
+          setFirebaseInitialized(true);
+        }
+      } catch (error) {
+        console.error("Firebase initialization error:", error);
         toast({
           title: "Connection Issue",
-          description: "There was a problem connecting to the server. Some features may not work correctly.",
+          description: "The app will work in offline mode with limited functionality.",
           variant: "destructive",
+          duration: 5000,
         });
-        setFirebaseInitialized(true); // Still proceed, but user has been warned
+        // Still allow the app to proceed in offline mode
+        setFirebaseInitialized(true);
       }
     };
     
@@ -120,10 +134,14 @@ const App = () => {
     setShowSplash(false);
   };
 
+  // Show a loading screen only if splash is done but Firebase is still initializing
   if (!firebaseInitialized && !showSplash) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        Connecting to servers...
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emergency-ambulance mx-auto mb-4"></div>
+          <p className="text-gray-600">Connecting to servers...</p>
+        </div>
       </div>
     );
   }
