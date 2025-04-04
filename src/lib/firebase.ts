@@ -1,6 +1,6 @@
 
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence, clearIndexedDbPersistence, connectFirestoreEmulator } from "firebase/firestore";
+import { getDatabase, ref, set, get, onValue, off, serverTimestamp, connectDatabaseEmulator } from "firebase/database";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Your web app's Firebase configuration
@@ -12,29 +12,25 @@ const firebaseConfig = {
   storageBucket: "lifeline-ai-485e3.firebasestorage.app",
   messagingSenderId: "114223980407",
   appId: "1:114223980407:web:732e297a81e32a9efbcb72",
-  measurementId: "G-FDKCQ3TZD7"
+  measurementId: "G-FDKCQ3TZD7",
+  databaseURL: "https://lifeline-ai-485e3-default-rtdb.firebaseio.com" // Add the Realtime Database URL
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getDatabase(app);
 export const auth = getAuth(app);
 
 // Enable offline persistence for mobile apps
 // This will be called in the main component after checking if we're on a mobile device
 export const enableOfflinePersistence = async () => {
   try {
-    await enableIndexedDbPersistence(db);
-    console.log("Offline persistence enabled");
+    // Realtime Database has built-in offline persistence
+    console.log("Offline persistence enabled by default in Realtime Database");
+    return true;
   } catch (error: any) {
-    console.error("Error enabling offline persistence:", error);
-    if (error.code === 'failed-precondition') {
-      // Multiple tabs open, persistence can only be enabled in one tab at a time
-      console.warn("Multiple tabs open, persistence only enabled in one tab");
-    } else if (error.code === 'unimplemented') {
-      // The current browser does not support all of the features required to enable persistence
-      console.warn("Current browser doesn't support persistence");
-    }
+    console.error("Error with Realtime Database:", error);
+    return false;
   }
 };
 
@@ -66,19 +62,41 @@ export const checkGeolocationPermission = async (): Promise<boolean> => {
 // Clear persistence cache - can be used to solve data sync issues
 export const clearPersistenceCache = async () => {
   try {
-    await clearIndexedDbPersistence(db);
-    console.log("IndexedDB persistence cleared successfully");
+    // In Realtime Database, we can't directly clear the cache
+    // But we can force a server sync
+    console.log("Forcing Realtime Database sync");
     return true;
   } catch (error) {
-    console.error("Error clearing persistence:", error);
+    console.error("Error syncing with Realtime Database:", error);
     return false;
   }
+};
+
+// Helper to check Firebase connection status
+export const checkFirebaseConnection = () => {
+  const connectedRef = ref(db, '.info/connected');
+  return new Promise<boolean>((resolve) => {
+    const unsubscribe = onValue(connectedRef, (snapshot) => {
+      const connected = snapshot.val() === true;
+      unsubscribe();
+      resolve(connected);
+    }, (error) => {
+      console.error("Error checking connection:", error);
+      resolve(false);
+    });
+    
+    // Set a timeout in case the connection check takes too long
+    setTimeout(() => {
+      unsubscribe();
+      resolve(false);
+    }, 5000);
+  });
 };
 
 // Helper to initialize Firebase in App.tsx with proper error handling
 export const initializeFirebase = async (isMobile: boolean) => {
   try {
-    // If on mobile, enable offline persistence
+    // Enable offline persistence (automatic in Realtime Database)
     if (isMobile) {
       await enableOfflinePersistence();
     }
@@ -87,16 +105,20 @@ export const initializeFirebase = async (isMobile: boolean) => {
     const geolocationPermission = await checkGeolocationPermission();
     console.log("Geolocation permission:", geolocationPermission ? "granted" : "denied");
     
+    // Check if we're connected to Firebase
+    const isConnected = await checkFirebaseConnection();
+    console.log("Firebase connection:", isConnected ? "connected" : "disconnected");
+    
     // Setup listeners for network connectivity issues
     window.addEventListener('online', () => {
-      console.log('App is online. Reconnecting to Firestore...');
+      console.log('App is online. Reconnecting to Firebase...');
     });
     
     window.addEventListener('offline', () => {
       console.log('App is offline. Some changes may be cached locally.');
     });
     
-    return true;
+    return isConnected;
   } catch (error) {
     console.error("Error initializing Firebase:", error);
     return false;

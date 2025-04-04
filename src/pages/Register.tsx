@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { AlertCircle, Loader2, Mail, Lock, User, Phone, Building, MapPin } from "lucide-react";
-import { useAuth, UserRole } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { 
   Dialog,
   DialogContent,
@@ -21,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import ImageUploader from "@/components/ImageUploader";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
 import { motion } from "framer-motion";
+import { UserRole } from "@/models/types";
 
 interface RoleImages {
   [key: string]: File | null;
@@ -84,14 +84,12 @@ const Register: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Auto redirect to login after registration success dialog is shown
   useEffect(() => {
     if (showDialog) {
-      // Set a timeout to automatically redirect to login page after showing the success dialog
       const redirectTimer = setTimeout(() => {
         setShowDialog(false);
         navigate("/login");
-      }, 3000); // 3 seconds delay before redirect
+      }, 3000);
       
       return () => clearTimeout(redirectTimer);
     }
@@ -183,13 +181,11 @@ const Register: React.FC = () => {
     e.preventDefault();
     setError("");
     
-    // Validate role selection
     if (!role) {
       setError("Please select your role");
       return;
     }
     
-    // Validate required images
     if (!validateImages()) {
       return;
     }
@@ -197,10 +193,8 @@ const Register: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // Upload images first
       const imageUrls = await uploadImages();
       
-      // Register user with image URLs
       await register({
         name,
         email,
@@ -216,9 +210,7 @@ const Register: React.FC = () => {
         }
       });
       
-      // Show success dialog and automatically redirect to login after a delay
       setShowDialog(true);
-      
     } catch (error: any) {
       setError(error.message || "Registration failed");
       console.error("Registration error:", error);
@@ -308,7 +300,6 @@ const Register: React.FC = () => {
           </div>
         )}
         
-        {/* Image upload fields */}
         {roleConfig.images.map((image) => (
           <ImageUploader
             key={image.id}
@@ -321,7 +312,6 @@ const Register: React.FC = () => {
     );
   };
 
-  // Step 1 - Basic Information
   const renderStep1 = () => (
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
@@ -404,7 +394,6 @@ const Register: React.FC = () => {
     </motion.div>
   );
 
-  // Step 2 - Role and additional information
   const renderStep2 = () => (
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
@@ -574,7 +563,6 @@ const Register: React.FC = () => {
         </div>
       </div>
       
-      {/* Registration success dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="bg-white rounded-2xl">
           <DialogHeader>

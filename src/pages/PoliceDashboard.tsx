@@ -6,15 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, MapPin, Phone } from "lucide-react";
 import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot,
-  Timestamp
-} from "firebase/firestore";
+  ref, 
+  onValue, 
+  query as dbQuery,
+  orderByChild,
+  off
+} from "firebase/database";
 import { db } from "@/lib/firebase";
 import { Ambulance } from "@/models/types";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { calculateDistance } from "@/utils/distance";
 
@@ -30,13 +30,13 @@ const PoliceDashboard: React.FC = () => {
   useEffect(() => {
     const fetchAmbulances = () => {
       try {
-        const ambulancesRef = collection(db, "ambulances");
+        const ambulancesRef = ref(db, "ambulances");
         
-        const unsubscribe = onSnapshot(ambulancesRef, (snapshot) => {
+        const unsubscribe = onValue(ambulancesRef, (snapshot) => {
           const ambulancesData: Ambulance[] = [];
           
-          snapshot.forEach((doc) => {
-            const data = doc.data();
+          snapshot.forEach((childSnapshot) => {
+            const data = childSnapshot.val();
             
             if (data.location && data.location.latitude && data.location.longitude) {
               let isNearby = false;
@@ -53,8 +53,12 @@ const PoliceDashboard: React.FC = () => {
                 isNearby = Math.random() > 0.7;
               }
               
+              const lastUpdated = data.lastUpdated ? 
+                (typeof data.lastUpdated === 'string' ? new Date(data.lastUpdated) : new Date(data.lastUpdated)) : 
+                new Date();
+              
               ambulancesData.push({
-                id: data.id,
+                id: childSnapshot.key || data.id,
                 driverName: data.driverName,
                 vehicleNumber: data.vehicleNumber,
                 severity: data.severity,
@@ -63,7 +67,7 @@ const PoliceDashboard: React.FC = () => {
                 destination: data.destination,
                 caseId: data.caseId,
                 isNearby,
-                lastUpdated: data.lastUpdated?.toDate() || new Date(),
+                lastUpdated: lastUpdated,
                 distance: policeLocation.latitude && policeLocation.longitude ? 
                   calculateDistance(
                     policeLocation.latitude,
@@ -83,7 +87,9 @@ const PoliceDashboard: React.FC = () => {
           setLoading(false);
         });
         
-        return () => unsubscribe();
+        return () => {
+          off(ambulancesRef);
+        };
       } catch (error) {
         console.error("Error setting up ambulances listener:", error);
         setLoading(false);
