@@ -60,7 +60,7 @@ const PoliceDashboard: React.FC = () => {
               
               // Create a properly typed Ambulance object
               ambulancesData.push({
-                id: childSnapshot.key || data.id,
+                id: childSnapshot.key || data.id || "",
                 name: data.name || "",
                 email: data.email || "",
                 role: "ambulance",
@@ -111,7 +111,8 @@ const PoliceDashboard: React.FC = () => {
     fetchAmbulances();
   }, [policeLocation.latitude, policeLocation.longitude]);
   
-  const getStatusBadgeClass = (status: string) => {
+  const getStatusBadgeClass = (status: string | undefined) => {
+    if (!status) return "bg-gray-500 text-white";
     switch(status) {
       case "en-route": return "bg-purple-500 text-white";
       case "idle": return "bg-gray-500 text-white";
@@ -119,7 +120,8 @@ const PoliceDashboard: React.FC = () => {
     }
   };
   
-  const getSeverityBadgeClass = (severity: string) => {
+  const getSeverityBadgeClass = (severity: string | undefined) => {
+    if (!severity) return "bg-gray-500 text-white";
     switch(severity) {
       case "critical": return "bg-red-500 text-white";
       case "serious": return "bg-orange-500 text-white";

@@ -7,18 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, Clock, X, MapPin, Phone, AlertCircle, Calendar, Clipboard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  updateDoc, 
-  doc, 
-  onSnapshot, 
-  serverTimestamp,
-  orderBy
-} from "firebase/firestore";
+  ref,
+  get,
+  set,
+  update,
+  remove,
+  push,
+  onValue,
+  off,
+  query,
+  orderByChild,
+  equalTo,
+  serverTimestamp
+} from "firebase/database";
 import { db } from "@/lib/firebase";
 import { EmergencyCase } from "@/models/types";
 import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
@@ -42,22 +45,20 @@ const HospitalDashboard: React.FC = () => {
     
     const fetchPendingCases = () => {
       try {
-        const casesRef = collection(db, "emergencyCases");
-        const q = query(
+        const casesRef = ref(db, "emergencyCases");
+        const pendingQuery = query(
           casesRef, 
-          where("status", "==", "pending"),
-          orderBy("createdAt", "desc")
+          orderByChild("status"),
+          equalTo("pending")
         );
         
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onValue(pendingQuery, (snapshot) => {
           const cases: EmergencyCase[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
+          snapshot.forEach((childSnapshot) => {
+            const data = childSnapshot.val();
             cases.push({
-              id: doc.id,
+              id: childSnapshot.key || "",
               ...data,
-              createdAt: data.createdAt?.toDate() || new Date(),
-              updatedAt: data.updatedAt?.toDate() || new Date(),
             } as EmergencyCase);
           });
           
@@ -74,7 +75,7 @@ const HospitalDashboard: React.FC = () => {
           setLoading(false);
         });
         
-        return () => unsubscribe();
+        return () => off(pendingQuery);
       } catch (error) {
         console.error("Error setting up pending cases listener:", error);
         toast({
@@ -94,24 +95,23 @@ const HospitalDashboard: React.FC = () => {
     
     const fetchActiveCases = () => {
       try {
-        const casesRef = collection(db, "emergencyCases");
-        const q = query(
+        const casesRef = ref(db, "emergencyCases");
+        const activeQuery = query(
           casesRef, 
-          where("hospitalId", "==", user.id),
-          where("status", "in", ["accepted", "en-route", "arrived"]),
-          orderBy("updatedAt", "desc")
+          orderByChild("hospitalId"),
+          equalTo(user.id)
         );
         
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onValue(activeQuery, (snapshot) => {
           const cases: EmergencyCase[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            cases.push({
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt?.toDate() || new Date(),
-              updatedAt: data.updatedAt?.toDate() || new Date(),
-            } as EmergencyCase);
+          snapshot.forEach((childSnapshot) => {
+            const data = childSnapshot.val();
+            if (data.status === "accepted" || data.status === "en-route" || data.status === "arrived") {
+              cases.push({
+                id: childSnapshot.key || "",
+                ...data,
+              } as EmergencyCase);
+            }
           });
           
           setActiveCases(cases);
@@ -125,7 +125,7 @@ const HospitalDashboard: React.FC = () => {
           });
         });
         
-        return () => unsubscribe();
+        return () => off(activeQuery);
       } catch (error) {
         console.error("Error setting up active cases listener:", error);
         toast({
@@ -144,24 +144,23 @@ const HospitalDashboard: React.FC = () => {
     
     const fetchHistoryCases = () => {
       try {
-        const casesRef = collection(db, "emergencyCases");
-        const q = query(
+        const casesRef = ref(db, "emergencyCases");
+        const historyQuery = query(
           casesRef, 
-          where("hospitalId", "==", user.id),
-          where("status", "==", "completed"),
-          orderBy("updatedAt", "desc")
+          orderByChild("hospitalId"),
+          equalTo(user.id)
         );
         
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onValue(historyQuery, (snapshot) => {
           const cases: EmergencyCase[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            cases.push({
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt?.toDate() || new Date(),
-              updatedAt: data.updatedAt?.toDate() || new Date(),
-            } as EmergencyCase);
+          snapshot.forEach((childSnapshot) => {
+            const data = childSnapshot.val();
+            if (data.status === "completed") {
+              cases.push({
+                id: childSnapshot.key || "",
+                ...data,
+              } as EmergencyCase);
+            }
           });
           
           setHistoryCases(cases);
@@ -174,7 +173,7 @@ const HospitalDashboard: React.FC = () => {
           });
         });
         
-        return () => unsubscribe();
+        return () => off(historyQuery);
       } catch (error) {
         console.error("Error setting up history cases listener:", error);
         toast({
@@ -201,12 +200,12 @@ const HospitalDashboard: React.FC = () => {
         beds: stats.availableBeds,
       };
       
-      const caseRef = doc(db, "emergencyCases", caseId);
-      await updateDoc(caseRef, {
+      const caseRef = ref(db, `emergencyCases/${caseId}`);
+      await update(caseRef, {
         status: "accepted",
         hospitalId: user.id,
         hospital: hospitalData,
-        updatedAt: serverTimestamp(),
+        updatedAt: new Date().toISOString(),
       });
       
       setStats(prev => ({
@@ -266,7 +265,8 @@ const HospitalDashboard: React.FC = () => {
     }
   };
   
-  const formatTimestamp = (date: Date) => {
+  const formatTimestamp = (dateStr: string) => {
+    const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.round(diffMs / 60000);

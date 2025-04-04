@@ -5,18 +5,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, UserRole } from "@/contexts/AuthContext";
+import { User, UserRole } from "@/models/types";
 import { Check, X, Users, Clipboard, AlertCircle, UserCheck, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  updateDoc, 
-  doc,
-  onSnapshot
-} from "firebase/firestore";
+  ref,
+  onValue,
+  update,
+  off,
+  query,
+  orderByChild,
+  equalTo
+} from "firebase/database";
 import { db } from "@/lib/firebase";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -46,9 +46,9 @@ const AdminDashboard: React.FC = () => {
   const { toast } = useToast();
   
   useEffect(() => {
-    const usersRef = collection(db, "users");
+    const usersRef = ref(db, "users");
     
-    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
+    const unsubscribe = onValue(usersRef, (snapshot) => {
       let ambulanceCount = 0;
       let hospitalCount = 0;
       let policeCount = 0;
@@ -56,8 +56,8 @@ const AdminDashboard: React.FC = () => {
       let approvedCount = 0;
       let rejectedCount = 0;
       
-      snapshot.forEach((doc) => {
-        const userData = doc.data();
+      snapshot.forEach((childSnapshot) => {
+        const userData = childSnapshot.val();
         
         if (userData.role === "ambulance") ambulanceCount++;
         if (userData.role === "hospital") hospitalCount++;
@@ -89,21 +89,21 @@ const AdminDashboard: React.FC = () => {
       setLoading(false);
     });
     
-    return () => unsubscribe();
+    return () => off(usersRef);
   }, [toast]);
   
   useEffect(() => {
     const fetchPendingUsers = async () => {
       try {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("status", "==", "pending"));
+        const usersRef = ref(db, "users");
+        const pendingQuery = query(usersRef, orderByChild("status"), equalTo("pending"));
         
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onValue(pendingQuery, (snapshot) => {
           const users: User[] = [];
-          snapshot.forEach((doc) => {
+          snapshot.forEach((childSnapshot) => {
             users.push({
-              id: doc.id,
-              ...doc.data()
+              id: childSnapshot.key || "",
+              ...childSnapshot.val()
             } as User);
           });
           
@@ -117,7 +117,7 @@ const AdminDashboard: React.FC = () => {
           });
         });
         
-        return () => unsubscribe();
+        return () => off(pendingQuery);
       } catch (error) {
         console.error("Error setting up pending users listener:", error);
         toast({
@@ -133,8 +133,8 @@ const AdminDashboard: React.FC = () => {
   
   const handleApproveUser = async (userId: string) => {
     try {
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, {
+      const userRef = ref(db, `users/${userId}`);
+      await update(userRef, {
         status: "approved",
       });
       
@@ -154,8 +154,8 @@ const AdminDashboard: React.FC = () => {
   
   const handleRejectUser = async (userId: string) => {
     try {
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, {
+      const userRef = ref(db, `users/${userId}`);
+      await update(userRef, {
         status: "rejected",
       });
       

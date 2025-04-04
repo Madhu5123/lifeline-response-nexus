@@ -59,6 +59,8 @@ export interface EmergencyCase {
     name: string;
     address: string;
     contact: string;
+    distance?: string;
+    beds?: number;
   };
   policeId?: string;
   ambulanceId?: string;
@@ -66,6 +68,8 @@ export interface EmergencyCase {
     id: string;
     driver: string;
     vehicleNumber: string;
+    driverName?: string;
+    estimatedArrival?: string;
   };
   patientName?: string;
   age?: number;
@@ -130,7 +134,7 @@ export interface Police extends User {
     badgeNumber: string;
     department: string;
     rank: string;
-    status: "on-duty" | "off-duty";
+    status: "on-duty" | "off-duty" | "en-route" | "idle";
     location?: {
       latitude: number;
       longitude: number;
