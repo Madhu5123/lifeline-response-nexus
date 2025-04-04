@@ -11,7 +11,6 @@ import { ref, set, get, onValue, off } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
 import { User, UserRole, UserDetails } from "@/models/types";
 import { useToast } from "@/hooks/use-toast";
-import { isAdminCredentials, ADMIN_EMAIL } from "@/utils/firebase-helpers";
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -31,16 +30,6 @@ interface RegisterData {
   role: UserRole;
   details?: UserDetails;
 }
-
-// Admin user object
-const ADMIN_USER: User = {
-  id: "admin-user-id",
-  email: ADMIN_EMAIL,
-  name: "Admin User",
-  role: "admin",
-  status: "approved",
-  details: {}
-};
 
 const AuthContext = createContext<AuthContextType>({
   currentUser: null,
@@ -101,16 +90,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsLoading(false);
         }
       } else {
-        // If no firebase user and not admin, set user to null
-        if (user?.email !== ADMIN_EMAIL) {
-          setUser(null);
-        }
+        setUser(null);
         setIsLoading(false);
       }
     });
     
     return () => unsubscribe();
-  }, [user?.email]);
+  }, []);
 
   const refreshUserData = async () => {
     if (!currentUser) return;
@@ -142,15 +128,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      // Check if using admin credentials
-      if (isAdminCredentials(email, password)) {
-        console.log("Admin login detected");
-        setUser(ADMIN_USER);
-        setCurrentUser(null); // No firebase user for admin
-        return;
-      }
-      
-      // Regular Firebase auth login
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       // Handle specific Firebase auth errors
@@ -207,12 +184,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      // If admin user, just clear the state
-      if (user?.email === ADMIN_EMAIL) {
-        setUser(null);
-        return;
-      }
-      
       // Clean up any user data listeners
       if (currentUser) {
         const userRef = ref(db, `users/${currentUser.uid}`);
@@ -230,7 +201,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value = {
     currentUser,
     user,
-    isAuthenticated: !!user && (user.status === "approved" || user.role === "admin"),
+    isAuthenticated: !!user && user.status === "approved",
     isLoading,
     login,
     register,

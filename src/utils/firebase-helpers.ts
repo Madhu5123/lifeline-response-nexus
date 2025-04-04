@@ -176,12 +176,3 @@ export const removeData = async (path: string): Promise<void> => {
     throw error;
   }
 };
-
-// Admin credentials
-export const ADMIN_EMAIL = "admin@lifeline.com";
-export const ADMIN_PASSWORD = "adminlifeline";
-
-// Check if credentials are admin credentials
-export const isAdminCredentials = (email: string, password: string): boolean => {
-  return email === ADMIN_EMAIL && password === ADMIN_PASSWORD;
-};
