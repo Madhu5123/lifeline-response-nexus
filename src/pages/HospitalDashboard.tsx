@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, Clock, X, MapPin, Phone, AlertCircle, Calendar, Clipboard, RefreshCw } from "lucide-react";
+import { Check, Clock, X, MapPin, Phone, AlertCircle, Calendar, Clipboard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
@@ -17,22 +17,17 @@ import {
   doc, 
   onSnapshot, 
   serverTimestamp,
-  orderBy,
-  Unsubscribe,
-  getDoc
+  orderBy
 } from "firebase/firestore";
-import { db, firebaseWrite, checkExistingCase, forceRefreshDocument } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { EmergencyCase } from "@/models/types";
 import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
-import useFirebaseOperation from "@/hooks/use-firebase-operation";
 
 const HospitalDashboard: React.FC = () => {
   const [pendingCases, setPendingCases] = useState<EmergencyCase[]>([]);
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [historyCases, setHistoryCases] = useState<EmergencyCase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState("pending");
   const [stats, setStats] = useState({
     pendingCount: 0,
     activeCount: 0,
@@ -42,155 +37,8 @@ const HospitalDashboard: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Add Firebase operation hooks
-  const acceptCaseOperation = useFirebaseOperation(
-    async (caseId: string) => {
-      if (!user) throw new Error("User not authenticated");
-      
-      const hospitalData = {
-        id: user.id,
-        name: user.details?.organization || "Hospital",
-        address: user.details?.address || "Hospital Address",
-        contact: user.details?.phone || "Contact Number",
-        distance: "Calculating...",
-        beds: stats.availableBeds,
-      };
-      
-      const caseRef = doc(db, "emergencyCases", caseId);
-      
-      // Check if case exists before updating
-      const caseDoc = await getDoc(caseRef);
-      if (!caseDoc.exists()) {
-        throw new Error("Case not found");
-      }
-      
-      // Update the case with hospital info
-      await updateDoc(caseRef, {
-        status: "accepted",
-        hospitalId: user.id,
-        hospital: hospitalData,
-        updatedAt: serverTimestamp(),
-      });
-      
-      // Get the updated document to ensure changes are reflected
-      await forceRefreshDocument(caseRef);
-      
-      return caseId;
-    },
-    "Case accepted successfully",
-    "Failed to accept case"
-  );
-
-  // Force refresh function for all data
-  const refreshAllData = useCallback(async () => {
-    if (!user) return;
-    
-    setRefreshing(true);
-    try {
-      // Force refresh pending cases
-      const pendingRef = collection(db, "emergencyCases");
-      const pendingQuery = query(
-        pendingRef,
-        where("status", "==", "pending"),
-        orderBy("createdAt", "desc")
-      );
-      const pendingSnapshot = await getDocs(pendingQuery);
-      const pendingData: EmergencyCase[] = [];
-      pendingSnapshot.forEach((doc) => {
-        const data = doc.data();
-        pendingData.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as EmergencyCase);
-      });
-      setPendingCases(pendingData);
-      
-      // Force refresh active cases
-      const activeRef = collection(db, "emergencyCases");
-      const activeQuery = query(
-        activeRef,
-        where("hospitalId", "==", user.id),
-        where("status", "in", ["accepted", "en-route", "arrived"]),
-        orderBy("updatedAt", "desc")
-      );
-      const activeSnapshot = await getDocs(activeQuery);
-      const activeData: EmergencyCase[] = [];
-      activeSnapshot.forEach((doc) => {
-        const data = doc.data();
-        activeData.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as EmergencyCase);
-      });
-      setActiveCases(activeData);
-      
-      // Force refresh history cases
-      const historyRef = collection(db, "emergencyCases");
-      const historyQuery = query(
-        historyRef,
-        where("hospitalId", "==", user.id),
-        where("status", "==", "completed"),
-        orderBy("updatedAt", "desc")
-      );
-      const historySnapshot = await getDocs(historyQuery);
-      const historyData: EmergencyCase[] = [];
-      historySnapshot.forEach((doc) => {
-        const data = doc.data();
-        historyData.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as EmergencyCase);
-      });
-      setHistoryCases(historyData);
-      
-      // Update stats
-      setStats(prev => ({
-        ...prev,
-        pendingCount: pendingData.length,
-        activeCount: activeData.length
-      }));
-      
-      toast({
-        title: "Data refreshed",
-        description: "All case data has been refreshed",
-      });
-    } catch (error) {
-      console.error("Error refreshing data:", error);
-      toast({
-        title: "Refresh failed",
-        description: "Could not refresh data. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  }, [user, toast]);
-  
-  // Listen for network status changes
-  useEffect(() => {
-    const handleOnline = () => {
-      console.log("Network connection restored, refreshing data...");
-      refreshAllData();
-    };
-    
-    window.addEventListener('online', handleOnline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [refreshAllData]);
-  
-  // Setup listeners for pending cases
   useEffect(() => {
     if (!user) return;
-    
-    let unsubscribe: Unsubscribe | null = null;
     
     const fetchPendingCases = () => {
       try {
@@ -201,7 +49,7 @@ const HospitalDashboard: React.FC = () => {
           orderBy("createdAt", "desc")
         );
         
-        unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onSnapshot(q, (snapshot) => {
           const cases: EmergencyCase[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -225,6 +73,8 @@ const HospitalDashboard: React.FC = () => {
           });
           setLoading(false);
         });
+        
+        return () => unsubscribe();
       } catch (error) {
         console.error("Error setting up pending cases listener:", error);
         toast({
@@ -237,19 +87,10 @@ const HospitalDashboard: React.FC = () => {
     };
     
     fetchPendingCases();
-    
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
   }, [user, toast]);
   
-  // Setup listeners for active cases
   useEffect(() => {
     if (!user) return;
-    
-    let unsubscribe: Unsubscribe | null = null;
     
     const fetchActiveCases = () => {
       try {
@@ -261,8 +102,7 @@ const HospitalDashboard: React.FC = () => {
           orderBy("updatedAt", "desc")
         );
         
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          console.log("Active cases snapshot received", snapshot.size);
+        const unsubscribe = onSnapshot(q, (snapshot) => {
           const cases: EmergencyCase[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -284,6 +124,8 @@ const HospitalDashboard: React.FC = () => {
             variant: "destructive",
           });
         });
+        
+        return () => unsubscribe();
       } catch (error) {
         console.error("Error setting up active cases listener:", error);
         toast({
@@ -295,19 +137,10 @@ const HospitalDashboard: React.FC = () => {
     };
     
     fetchActiveCases();
-    
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
   }, [user, toast]);
   
-  // Setup listeners for history cases
   useEffect(() => {
     if (!user) return;
-    
-    let unsubscribe: Unsubscribe | null = null;
     
     const fetchHistoryCases = () => {
       try {
@@ -319,7 +152,7 @@ const HospitalDashboard: React.FC = () => {
           orderBy("updatedAt", "desc")
         );
         
-        unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onSnapshot(q, (snapshot) => {
           const cases: EmergencyCase[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -340,6 +173,8 @@ const HospitalDashboard: React.FC = () => {
             variant: "destructive",
           });
         });
+        
+        return () => unsubscribe();
       } catch (error) {
         console.error("Error setting up history cases listener:", error);
         toast({
@@ -351,72 +186,43 @@ const HospitalDashboard: React.FC = () => {
     };
     
     fetchHistoryCases();
-    
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
   }, [user, toast]);
   
-  // Handle tab change
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    
-    // Force refresh data when switching to a tab
-    if (value === "active" || value === "history") {
-      refreshAllData();
-    }
-  };
-  
-  // Handle case acceptance with improved reliability
   const handleAcceptCase = async (caseId: string) => {
     if (!user) return;
     
     try {
-      // Check if the case is still available
+      const hospitalData = {
+        id: user.id,
+        name: user.details?.organization || "Hospital",
+        address: user.details?.address || "Hospital Address",
+        contact: user.details?.phone || "Contact Number",
+        distance: "Calculating...",
+        beds: stats.availableBeds,
+      };
+      
       const caseRef = doc(db, "emergencyCases", caseId);
-      const caseSnap = await getDoc(caseRef);
+      await updateDoc(caseRef, {
+        status: "accepted",
+        hospitalId: user.id,
+        hospital: hospitalData,
+        updatedAt: serverTimestamp(),
+      });
       
-      if (!caseSnap.exists()) {
-        toast({
-          title: "Case not found",
-          description: "This emergency case no longer exists",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      const caseData = caseSnap.data();
-      if (caseData.status !== "pending") {
-        toast({
-          title: "Case already taken",
-          description: "This emergency case has already been accepted by another hospital",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Execute the accept operation
-      await acceptCaseOperation.execute(caseId);
-      
-      // After accepting, update bed count
       setStats(prev => ({
         ...prev,
-        availableBeds: Math.max(0, prev.availableBeds - 1)
+        availableBeds: prev.availableBeds - 1
       }));
       
-      // Force refresh active cases and switch to active tab
-      setActiveTab("active");
-      
-      // Force a refresh of all data after a short delay to ensure changes are reflected
-      setTimeout(() => refreshAllData(), 500);
-      
+      toast({
+        title: "Case Accepted",
+        description: `You have accepted the emergency case. The ambulance has been notified.`,
+      });
     } catch (error) {
       console.error("Error accepting case:", error);
       toast({
         title: "Error",
-        description: "Failed to accept the case. Please try again.",
+        description: "Failed to accept the case",
         variant: "destructive",
       });
     }
@@ -536,323 +342,285 @@ const HospitalDashboard: React.FC = () => {
           </Card>
         </div>
         
-        <div className="flex justify-between items-center">
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-            <TabsList className="w-full sm:w-auto flex overflow-x-auto p-1 bg-gray-100 dark:bg-gray-800 rounded-full h-14">
-              <TabsTrigger value="pending" className="rounded-full flex items-center space-x-2 px-5 h-12">
-                <Clock className="h-4 w-4" />
-                <span>Pending</span>
-              </TabsTrigger>
-              <TabsTrigger value="active" className="rounded-full flex items-center space-x-2 px-5 h-12">
-                <Clipboard className="h-4 w-4" />
-                <span>Active</span>
-              </TabsTrigger>
-              <TabsTrigger value="history" className="rounded-full flex items-center space-x-2 px-5 h-12">
-                <Calendar className="h-4 w-4" />
-                <span>History</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <Tabs defaultValue="pending" className="space-y-6">
+          <TabsList className="w-full sm:w-auto flex overflow-x-auto p-1 bg-gray-100 dark:bg-gray-800 rounded-full h-14">
+            <TabsTrigger value="pending" className="rounded-full flex items-center space-x-2 px-5 h-12">
+              <Clock className="h-4 w-4" />
+              <span>Pending</span>
+            </TabsTrigger>
+            <TabsTrigger value="active" className="rounded-full flex items-center space-x-2 px-5 h-12">
+              <Clipboard className="h-4 w-4" />
+              <span>Active</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="rounded-full flex items-center space-x-2 px-5 h-12">
+              <Calendar className="h-4 w-4" />
+              <span>History</span>
+            </TabsTrigger>
+          </TabsList>
           
-          <Button 
-            variant="outline" 
-            className="ml-2 gap-2 rounded-full"
-            onClick={refreshAllData}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-          </Button>
-        </div>
-        
-        <div className="space-y-6">
-          {activeTab === "pending" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Pending Requests</h2>
-                <Badge variant="outline" className="font-normal bg-yellow-50 text-yellow-700 border-yellow-200 px-3 py-1">
-                  {pendingCases.length} pending
-                </Badge>
-              </div>
-              
-              {loading ? (
-                <div className="flex justify-center p-8">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                </div>
-              ) : pendingCases.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <Clock className="h-12 w-12 text-gray-400 mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 text-center">
-                    No pending emergency requests at the moment.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {pendingCases.map(emergency => (
-                    <Card key={emergency.id} className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-gray-800">
-                      <div className="h-2 bg-yellow-400"></div>
-                      <CardHeader>
-                        <div className="flex flex-wrap justify-between items-start gap-2">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-yellow-100 dark:bg-yellow-800 flex items-center justify-center text-yellow-600 dark:text-yellow-300">
-                              {emergency.patientName?.charAt(0) || 'P'}
-                            </div>
-                            <div>
-                              <CardTitle>{emergency.patientName}</CardTitle>
-                              <CardDescription>
-                                Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
-                              </CardDescription>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Badge className={getSeverityBadgeClass(emergency.severity)}>
-                              {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
-                            </Badge>
-                            <Badge className={getStatusBadgeClass(emergency.status)}>
-                              {emergency.status.charAt(0).toUpperCase() + emergency.status.slice(1)}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
-                            <p className="font-medium">{emergency.patientName}</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
-                            <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Symptoms/Condition</p>
-                          <p className="text-sm">{emergency.symptoms}</p>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
-                        <Button 
-                          variant="outline" 
-                          className="rounded-full border-red-200 hover:bg-red-50 text-red-700 flex items-center gap-1 px-4"
-                          onClick={() => handleRejectCase(emergency.id)}
-                        >
-                          <X className="h-4 w-4" />
-                          <span>Reject</span>
-                        </Button>
-                        <Button 
-                          className="rounded-full bg-green-600 hover:bg-green-700 flex items-center gap-1 px-4"
-                          onClick={() => handleAcceptCase(emergency.id)}
-                          disabled={acceptCaseOperation.status === 'loading'}
-                        >
-                          {acceptCaseOperation.status === 'loading' ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              <span>Accepting...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-4 w-4" />
-                              <span>Accept</span>
-                            </>
-                          )}
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              )}
+          <TabsContent value="pending" className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Pending Requests</h2>
+              <Badge variant="outline" className="font-normal bg-yellow-50 text-yellow-700 border-yellow-200 px-3 py-1">
+                {pendingCases.length} pending
+              </Badge>
             </div>
-          )}
+            
+            {loading ? (
+              <div className="flex justify-center p-8">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+              </div>
+            ) : pendingCases.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-10 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                <Clock className="h-12 w-12 text-gray-400 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-center">
+                  No pending emergency requests at the moment.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {pendingCases.map(emergency => (
+                  <Card key={emergency.id} className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-gray-800">
+                    <div className="h-2 bg-yellow-400"></div>
+                    <CardHeader>
+                      <div className="flex flex-wrap justify-between items-start gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-yellow-100 dark:bg-yellow-800 flex items-center justify-center text-yellow-600 dark:text-yellow-300">
+                            {emergency.patientName?.charAt(0) || 'P'}
+                          </div>
+                          <div>
+                            <CardTitle>{emergency.patientName}</CardTitle>
+                            <CardDescription>
+                              Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge className={getSeverityBadgeClass(emergency.severity)}>
+                            {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
+                          </Badge>
+                          <Badge className={getStatusBadgeClass(emergency.status)}>
+                            {emergency.status.charAt(0).toUpperCase() + emergency.status.slice(1)}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
+                          <p className="font-medium">{emergency.patientName}</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
+                          <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Symptoms/Condition</p>
+                        <p className="text-sm">{emergency.symptoms}</p>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
+                      <Button 
+                        variant="outline" 
+                        className="rounded-full border-red-200 hover:bg-red-50 text-red-700 flex items-center gap-1 px-4"
+                        onClick={() => handleRejectCase(emergency.id)}
+                      >
+                        <X className="h-4 w-4" />
+                        <span>Reject</span>
+                      </Button>
+                      <Button 
+                        className="rounded-full bg-green-600 hover:bg-green-700 flex items-center gap-1 px-4"
+                        onClick={() => handleAcceptCase(emergency.id)}
+                      >
+                        <Check className="h-4 w-4" />
+                        <span>Accept</span>
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
           
-          {activeTab === "active" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Active Cases</h2>
-                <Badge variant="outline" className="font-normal bg-blue-50 text-blue-700 border-blue-200 px-3 py-1">
-                  {activeCases.length} active
-                </Badge>
-              </div>
-              
-              {loading || refreshing ? (
-                <div className="flex justify-center p-8">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                </div>
-              ) : activeCases.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <Clipboard className="h-12 w-12 text-gray-400 mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 text-center">
-                    No active cases at the moment
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {activeCases.map(emergency => (
-                    <Card 
-                      key={emergency.id} 
-                      className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-gray-800"
-                    >
-                      <div className={`h-2 ${
-                        emergency.status === "en-route" ? "bg-purple-500" : 
-                        emergency.status === "arrived" ? "bg-green-500" : 
-                        "bg-blue-500"
-                      }`}></div>
-                      <CardHeader>
-                        <div className="flex flex-wrap justify-between items-start gap-2">
-                          <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white ${
-                              emergency.status === "en-route" ? "bg-purple-500" : 
-                              emergency.status === "arrived" ? "bg-green-500" : 
-                              "bg-blue-500"
-                            }`}>
-                              {emergency.patientName?.charAt(0) || 'P'}
-                            </div>
-                            <div>
-                              <CardTitle>{emergency.patientName}</CardTitle>
-                              <CardDescription>
-                                Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
-                              </CardDescription>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Badge className={getSeverityBadgeClass(emergency.severity)}>
-                              {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
-                            </Badge>
-                            <Badge className={getStatusBadgeClass(emergency.status)}>
-                              {emergency.status.charAt(0).toUpperCase() + emergency.status.slice(1)}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
-                            <p className="font-medium">{emergency.patientName}</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
-                            <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Symptoms/Condition</p>
-                          <p className="text-sm">{emergency.symptoms}</p>
-                        </div>
-                        
-                        {emergency.ambulanceInfo && (
-                          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
-                            <h3 className="font-medium text-blue-800 dark:text-blue-300 mb-3">Ambulance Information</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
-                                <p className="text-xs text-blue-700 dark:text-blue-400">Driver</p>
-                                <p className="text-sm font-medium">{emergency.ambulanceInfo.driverName}</p>
-                              </div>
-                              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
-                                <p className="text-xs text-blue-700 dark:text-blue-400">Vehicle</p>
-                                <p className="text-sm font-medium">{emergency.ambulanceInfo.vehicleNumber}</p>
-                              </div>
-                            </div>
-                            <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-lg">
-                              <p className="text-xs text-blue-700 dark:text-blue-400">ETA</p>
-                              <p className="text-sm font-medium">{emergency.ambulanceInfo.estimatedArrival || "Calculating..."}</p>
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                      <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
-                        <Button variant="outline" className="rounded-full">
-                          Contact Ambulance
-                        </Button>
-                        <Button className="rounded-full">
-                          Prepare Reception
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              )}
+          <TabsContent value="active" className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Active Cases</h2>
+              <Badge variant="outline" className="font-normal bg-blue-50 text-blue-700 border-blue-200 px-3 py-1">
+                {activeCases.length} active
+              </Badge>
             </div>
-          )}
+            
+            {activeCases.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-10 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                <Clipboard className="h-12 w-12 text-gray-400 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-center">
+                  No active cases at the moment
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {activeCases.map(emergency => (
+                  <Card 
+                    key={emergency.id} 
+                    className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-gray-800"
+                  >
+                    <div className={`h-2 ${
+                      emergency.status === "en-route" ? "bg-purple-500" : 
+                      emergency.status === "arrived" ? "bg-green-500" : 
+                      "bg-blue-500"
+                    }`}></div>
+                    <CardHeader>
+                      <div className="flex flex-wrap justify-between items-start gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white ${
+                            emergency.status === "en-route" ? "bg-purple-500" : 
+                            emergency.status === "arrived" ? "bg-green-500" : 
+                            "bg-blue-500"
+                          }`}>
+                            {emergency.patientName?.charAt(0) || 'P'}
+                          </div>
+                          <div>
+                            <CardTitle>{emergency.patientName}</CardTitle>
+                            <CardDescription>
+                              Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge className={getSeverityBadgeClass(emergency.severity)}>
+                            {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
+                          </Badge>
+                          <Badge className={getStatusBadgeClass(emergency.status)}>
+                            {emergency.status.charAt(0).toUpperCase() + emergency.status.slice(1)}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
+                          <p className="font-medium">{emergency.patientName}</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
+                          <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Symptoms/Condition</p>
+                        <p className="text-sm">{emergency.symptoms}</p>
+                      </div>
+                      
+                      {emergency.ambulanceInfo && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                          <h3 className="font-medium text-blue-800 dark:text-blue-300 mb-3">Ambulance Information</h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
+                              <p className="text-xs text-blue-700 dark:text-blue-400">Driver</p>
+                              <p className="text-sm font-medium">{emergency.ambulanceInfo.driverName}</p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
+                              <p className="text-xs text-blue-700 dark:text-blue-400">Vehicle</p>
+                              <p className="text-sm font-medium">{emergency.ambulanceInfo.vehicleNumber}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-lg">
+                            <p className="text-xs text-blue-700 dark:text-blue-400">ETA</p>
+                            <p className="text-sm font-medium">{emergency.ambulanceInfo.estimatedArrival || "Calculating..."}</p>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                    <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
+                      <Button variant="outline" className="rounded-full">
+                        Contact Ambulance
+                      </Button>
+                      <Button className="rounded-full">
+                        Prepare Reception
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
           
-          {activeTab === "history" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Case History</h2>
-                <Badge variant="outline" className="font-normal bg-gray-50 text-gray-700 border-gray-200 px-3 py-1">
-                  {historyCases.length} completed
-                </Badge>
-              </div>
-              
-              {loading || refreshing ? (
-                <div className="flex justify-center p-8">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                </div>
-              ) : historyCases.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <Calendar className="h-12 w-12 text-gray-400 mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 text-center">
-                    No case history available
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {historyCases.map(emergency => (
-                    <Card key={emergency.id} className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-gray-800">
-                      <div className="h-2 bg-gray-400"></div>
-                      <CardHeader>
-                        <div className="flex flex-wrap justify-between items-start gap-2">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300">
-                              {emergency.patientName?.charAt(0) || 'P'}
-                            </div>
-                            <div>
-                              <CardTitle>{emergency.patientName}</CardTitle>
-                              <CardDescription>
-                                Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
-                              </CardDescription>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Badge className={getSeverityBadgeClass(emergency.severity)}>
-                              {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
-                            </Badge>
-                            <Badge className="bg-gray-500 text-white">
-                              Completed
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
-                            <p className="font-medium">{emergency.patientName}</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
-                            <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Symptoms/Condition</p>
-                          <p className="text-sm">{emergency.symptoms}</p>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
-                        <Button variant="outline" className="rounded-full">
-                          View Full Case Details
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              )}
+          <TabsContent value="history" className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Case History</h2>
+              <Badge variant="outline" className="font-normal bg-gray-50 text-gray-700 border-gray-200 px-3 py-1">
+                {historyCases.length} completed
+              </Badge>
             </div>
-          )}
-        </div>
+            
+            {historyCases.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-10 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                <Calendar className="h-12 w-12 text-gray-400 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-center">
+                  No case history available
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {historyCases.map(emergency => (
+                  <Card key={emergency.id} className="rounded-xl overflow-hidden border-0 shadow-md bg-white dark:bg-gray-800">
+                    <div className="h-2 bg-gray-400"></div>
+                    <CardHeader>
+                      <div className="flex flex-wrap justify-between items-start gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300">
+                            {emergency.patientName?.charAt(0) || 'P'}
+                          </div>
+                          <div>
+                            <CardTitle>{emergency.patientName}</CardTitle>
+                            <CardDescription>
+                              Case #{emergency.id.substring(0, 6)} • {formatTimestamp(emergency.createdAt)}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge className={getSeverityBadgeClass(emergency.severity)}>
+                            {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
+                          </Badge>
+                          <Badge className="bg-gray-500 text-white">
+                            Completed
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Patient</p>
+                          <p className="font-medium">{emergency.patientName}</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Age/Gender</p>
+                          <p className="font-medium">{emergency.age} / {emergency.gender.charAt(0).toUpperCase() + emergency.gender.slice(1)}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Symptoms/Condition</p>
+                        <p className="text-sm">{emergency.symptoms}</p>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
+                      <Button variant="outline" className="rounded-full">
+                        View Full Case Details
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
