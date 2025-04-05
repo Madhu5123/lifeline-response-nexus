@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -31,6 +30,19 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+interface HospitalWithLocation {
+  id: string;
+  name: string;
+  address: string;
+  contact: string;
+  distance?: string;
+  beds?: number;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
 const AmbulanceDashboard: React.FC = () => {
   const [cases, setCases] = useState<EmergencyCase[]>([]);
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
@@ -38,7 +50,7 @@ const AmbulanceDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [ambulanceStatus, setAmbulanceStatus] = useState<"available" | "busy" | "offline" | "en-route" | "idle">("available");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [nearbyHospitals, setNearbyHospitals] = useState<any[]>([]);
+  const [nearbyHospitals, setNearbyHospitals] = useState<HospitalWithLocation[]>([]);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
   const locationTrackingRef = useRef<(() => void) | null>(null);
   
@@ -54,11 +66,11 @@ const AmbulanceDashboard: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const location = useGeolocation({ enableHighAccuracy: true }, 10000);
-  const { updateLocation, startLocationTracking } = useFirebaseDatabase({
+  
+  const { updateLocation, startLocationTracking: dbStartLocationTracking } = useFirebaseDatabase({
     path: 'ambulances'
   });
   
-  // Update ambulance location when it changes
   useEffect(() => {
     if (!user || !location.latitude || !location.longitude) return;
     
@@ -78,7 +90,6 @@ const AmbulanceDashboard: React.FC = () => {
     }
   }, [location.latitude, location.longitude, user]);
   
-  // Fetch nearby hospitals based on current location
   useEffect(() => {
     if (!location.latitude || !location.longitude) return;
     
@@ -88,7 +99,7 @@ const AmbulanceDashboard: React.FC = () => {
         const snapshot = await get(hospitalsRef);
         
         if (snapshot.exists()) {
-          const hospitals: any[] = [];
+          const hospitals: HospitalWithLocation[] = [];
           
           snapshot.forEach((childSnapshot) => {
             const hospital = childSnapshot.val();
@@ -111,7 +122,7 @@ const AmbulanceDashboard: React.FC = () => {
             }
           });
           
-          hospitals.sort((a, b) => a.distance - b.distance);
+          hospitals.sort((a, b) => a.distance! - b.distance!);
           setNearbyHospitals(hospitals);
         }
       } catch (error) {
@@ -122,7 +133,6 @@ const AmbulanceDashboard: React.FC = () => {
     fetchHospitals();
   }, [location.latitude, location.longitude]);
   
-  // Fetch available cases
   useEffect(() => {
     if (!user) return;
     
@@ -173,7 +183,6 @@ const AmbulanceDashboard: React.FC = () => {
     fetchAvailableCases();
   }, [user, toast]);
   
-  // Fetch active and completed cases
   useEffect(() => {
     if (!user) return;
     
@@ -206,7 +215,6 @@ const AmbulanceDashboard: React.FC = () => {
               
               setAmbulanceStatus(caseData.status === "en-route" ? "en-route" : "busy");
               
-              // Stop location tracking if there are no en-route cases
               if (caseData.status !== "en-route" && isTrackingLocation) {
                 stopLocationTracking();
               }
@@ -225,7 +233,6 @@ const AmbulanceDashboard: React.FC = () => {
               lastUpdated: new Date().toISOString()
             });
             
-            // Make sure to stop location tracking if there are no active cases
             if (isTrackingLocation) {
               stopLocationTracking();
             }
@@ -253,7 +260,6 @@ const AmbulanceDashboard: React.FC = () => {
     fetchActiveCases();
   }, [user, toast, isTrackingLocation]);
   
-  // Clean up location tracking on component unmount
   useEffect(() => {
     return () => {
       if (locationTrackingRef.current) {
@@ -341,8 +347,9 @@ const AmbulanceDashboard: React.FC = () => {
     }
     
     let destination;
-    if (emergencyCase.hospital?.location?.latitude && emergencyCase.hospital?.location?.longitude) {
-      destination = `${emergencyCase.hospital.location.latitude},${emergencyCase.hospital.location.longitude}`;
+    const hospitalLocation = emergencyCase.hospital as HospitalWithLocation;
+    if (hospitalLocation.location?.latitude && hospitalLocation.location?.longitude) {
+      destination = `${hospitalLocation.location.latitude},${hospitalLocation.location.longitude}`;
     } else {
       destination = encodeURIComponent(emergencyCase.hospital?.address || emergencyCase.hospital?.name || "Hospital");
     }
@@ -353,10 +360,8 @@ const AmbulanceDashboard: React.FC = () => {
   const startLocationTracking = () => {
     if (!user) return;
     
-    // Stop existing tracking if any
     stopLocationTracking();
     
-    // Get current location for tracking updates
     const getCurrentLocation = async () => {
       if (!location.latitude || !location.longitude) {
         throw new Error("Location not available");
@@ -367,11 +372,10 @@ const AmbulanceDashboard: React.FC = () => {
       };
     };
     
-    // Start new tracking
-    locationTrackingRef.current = startLocationTracking(
+    locationTrackingRef.current = dbStartLocationTracking(
       user.id, 
       getCurrentLocation,
-      120000 // Update every 2 minutes (120000 ms)
+      120000
     );
     
     setIsTrackingLocation(true);
@@ -399,13 +403,14 @@ const AmbulanceDashboard: React.FC = () => {
       let eta = "Calculating...";
       let distanceKm = 0;
       
-      if (emergencyCase.hospital?.location?.latitude && emergencyCase.hospital?.location?.longitude && 
+      const hospitalLocation = emergencyCase.hospital as HospitalWithLocation;
+      if (hospitalLocation?.location?.latitude && hospitalLocation?.location?.longitude && 
           location.latitude && location.longitude) {
         distanceKm = calculateDistance(
           location.latitude,
           location.longitude,
-          emergencyCase.hospital.location.latitude,
-          emergencyCase.hospital.location.longitude
+          hospitalLocation.location.latitude,
+          hospitalLocation.location.longitude
         );
         
         eta = formatETA(calculateETA(distanceKm));
@@ -428,7 +433,6 @@ const AmbulanceDashboard: React.FC = () => {
       
       setAmbulanceStatus("en-route");
       
-      // Start location tracking
       startLocationTracking();
       
       toast({
@@ -462,7 +466,6 @@ const AmbulanceDashboard: React.FC = () => {
         lastUpdated: new Date().toISOString()
       });
       
-      // Stop location tracking since we've arrived
       stopLocationTracking();
       
       toast({
@@ -501,7 +504,6 @@ const AmbulanceDashboard: React.FC = () => {
       
       setAmbulanceStatus("available");
       
-      // Stop location tracking if still active
       if (isTrackingLocation) {
         stopLocationTracking();
       }
@@ -542,7 +544,6 @@ const AmbulanceDashboard: React.FC = () => {
       
       setAmbulanceStatus("available");
       
-      // Stop location tracking if still active
       if (isTrackingLocation) {
         stopLocationTracking();
       }

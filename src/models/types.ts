@@ -61,6 +61,11 @@ export interface EmergencyCase {
     contact: string;
     distance?: string;
     beds?: number;
+    location?: {
+      latitude: number;
+      longitude: number;
+      lastUpdated?: string;
+    };
   };
   policeId?: string;
   ambulanceId?: string;
