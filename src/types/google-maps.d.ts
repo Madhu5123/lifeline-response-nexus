@@ -34,6 +34,12 @@ declare namespace google {
       ): void;
     }
 
+    // Add MapMouseEvent interface
+    interface MapMouseEvent {
+      latLng?: LatLng;
+      stop(): void;
+    }
+
     interface MapOptions {
       center: LatLng | LatLngLiteral;
       zoom: number;

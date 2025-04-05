@@ -93,7 +93,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     });
     
     // Add click event to the map
-    newMap.addListener('click', (event: google.maps.MapMouseEvent) => {
+    newMap.addListener('click', (event: any) => {
       if (event.latLng) {
         newMarker.setPosition(event.latLng);
         // Get address from coordinates
