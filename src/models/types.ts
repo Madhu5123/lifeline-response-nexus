@@ -1,4 +1,3 @@
-
 // User roles 
 export type UserRole = "admin" | "ambulance" | "hospital" | "police" | "unverified";
 
@@ -102,6 +101,23 @@ export interface Hospital extends User {
     address?: string;
     contact?: string;
     distance?: string;
+  };
+}
+
+// Hospital with location interface
+export interface HospitalWithLocation {
+  id: string;
+  name: string;
+  address: string;
+  contact: string;
+  distance?: number;
+  formattedDistance?: string;
+  beds?: number;
+  organization?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    lastUpdated?: string;
   };
 }
 

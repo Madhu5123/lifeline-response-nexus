@@ -22,26 +22,13 @@ import {
   push
 } from "firebase/database";
 import { db } from "@/lib/firebase";
-import { EmergencyCase, CaseStatus } from "@/models/types";
+import { EmergencyCase, CaseStatus, HospitalWithLocation } from "@/models/types";
 import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-
-interface HospitalWithLocation {
-  id: string;
-  name: string;
-  address: string;
-  contact: string;
-  distance?: string;
-  beds?: number;
-  location?: {
-    latitude: number;
-    longitude: number;
-  };
-}
 
 const AmbulanceDashboard: React.FC = () => {
   const [cases, setCases] = useState<EmergencyCase[]>([]);
@@ -122,7 +109,12 @@ const AmbulanceDashboard: React.FC = () => {
             }
           });
           
-          hospitals.sort((a, b) => a.distance! - b.distance!);
+          hospitals.sort((a, b) => {
+            const distanceA = typeof a.distance === 'number' ? a.distance : 0;
+            const distanceB = typeof b.distance === 'number' ? b.distance : 0;
+            return distanceA - distanceB;
+          });
+
           setNearbyHospitals(hospitals);
         }
       } catch (error) {
@@ -813,8 +805,8 @@ const AmbulanceDashboard: React.FC = () => {
                     <div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded text-sm">
                       {nearbyHospitals.map((hospital) => (
                         <div key={hospital.id} className="flex justify-between py-1 border-b">
-                          <span>{hospital.name || hospital.organization}</span>
-                          <span className="text-blue-600">{hospital.formattedDistance}</span>
+                          <span>{hospital.name || hospital.organization || "Unknown Hospital"}</span>
+                          <span className="text-blue-600">{hospital.formattedDistance || "Unknown"}</span>
                         </div>
                       ))}
                     </div>
