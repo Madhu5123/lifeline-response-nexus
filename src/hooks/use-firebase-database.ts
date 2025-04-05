@@ -293,6 +293,54 @@ export function useFirebaseDatabase<T = any>(options: FirebaseDatabaseOptions) {
     }
   }, [options.path, fetchData, options.realtime, options.notifyOnSuccess, options.notifyOnError, toast]);
 
+  // Update location function (new addition)
+  const updateLocation = useCallback(async (id: string, latitude: number, longitude: number) => {
+    const itemPath = `${options.path}/${id}`;
+    
+    try {
+      const reference = ref(db, itemPath);
+      await update(reference, {
+        location: {
+          latitude,
+          longitude,
+          lastUpdated: new Date().toISOString()
+        }
+      });
+      
+      return true;
+    } catch (err: any) {
+      console.error("Error updating location:", err);
+      throw err;
+    }
+  }, [options.path]);
+  
+  // Location tracker with interval (new addition)
+  const startLocationTracking = useCallback((id: string, getCurrentLocation: () => Promise<{latitude: number, longitude: number}>, intervalMs: number = 120000) => {
+    let intervalId: number | null = null;
+    
+    const trackLocation = async () => {
+      try {
+        const location = await getCurrentLocation();
+        await updateLocation(id, location.latitude, location.longitude);
+      } catch (error) {
+        console.error("Error in location tracking:", error);
+      }
+    };
+    
+    // Start tracking
+    intervalId = window.setInterval(trackLocation, intervalMs);
+    
+    // Initial update
+    trackLocation();
+    
+    // Return function to stop tracking
+    return () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [updateLocation]);
+
   return {
     data,
     isLoading,
@@ -302,6 +350,8 @@ export function useFirebaseDatabase<T = any>(options: FirebaseDatabaseOptions) {
     updateData,
     removeData,
     setData: setDirectData,
-    refresh: fetchData
+    refresh: fetchData,
+    updateLocation,
+    startLocationTracking
   };
 }

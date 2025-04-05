@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, MapPin, Phone, AlertCircle, Calendar, Clipboard, Flag, Plus } from "lucide-react";
+import { Check, MapPin, Phone, AlertCircle, Calendar, Clipboard, Flag, Plus, Navigation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
+import { useFirebaseDatabase } from "@/hooks/use-firebase-database";
 import { 
   ref,
   onValue,
@@ -37,6 +39,8 @@ const AmbulanceDashboard: React.FC = () => {
   const [ambulanceStatus, setAmbulanceStatus] = useState<"available" | "busy" | "offline" | "en-route" | "idle">("available");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [nearbyHospitals, setNearbyHospitals] = useState<any[]>([]);
+  const [isTrackingLocation, setIsTrackingLocation] = useState(false);
+  const locationTrackingRef = useRef<(() => void) | null>(null);
   
   const [newCase, setNewCase] = useState({
     patientName: "",
@@ -50,28 +54,31 @@ const AmbulanceDashboard: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const location = useGeolocation({ enableHighAccuracy: true }, 10000);
+  const { updateLocation, startLocationTracking } = useFirebaseDatabase({
+    path: 'ambulances'
+  });
   
+  // Update ambulance location when it changes
   useEffect(() => {
-    if (!user) return;
+    if (!user || !location.latitude || !location.longitude) return;
     
-    if (location.latitude && location.longitude) {
-      try {
-        const ambulanceRef = ref(db, `ambulances/${user.id}`);
-        update(ambulanceRef, {
-          location: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            lastUpdated: new Date().toISOString(),
-            address: "Current Location"
-          },
-          lastUpdated: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error("Error updating ambulance location:", error);
-      }
+    try {
+      const ambulanceRef = ref(db, `ambulances/${user.id}`);
+      update(ambulanceRef, {
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          lastUpdated: new Date().toISOString(),
+          address: "Current Location"
+        },
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error updating ambulance location:", error);
     }
   }, [location.latitude, location.longitude, user]);
   
+  // Fetch nearby hospitals based on current location
   useEffect(() => {
     if (!location.latitude || !location.longitude) return;
     
@@ -115,6 +122,7 @@ const AmbulanceDashboard: React.FC = () => {
     fetchHospitals();
   }, [location.latitude, location.longitude]);
   
+  // Fetch available cases
   useEffect(() => {
     if (!user) return;
     
@@ -165,6 +173,7 @@ const AmbulanceDashboard: React.FC = () => {
     fetchAvailableCases();
   }, [user, toast]);
   
+  // Fetch active and completed cases
   useEffect(() => {
     if (!user) return;
     
@@ -196,6 +205,11 @@ const AmbulanceDashboard: React.FC = () => {
               } as EmergencyCase);
               
               setAmbulanceStatus(caseData.status === "en-route" ? "en-route" : "busy");
+              
+              // Stop location tracking if there are no en-route cases
+              if (caseData.status !== "en-route" && isTrackingLocation) {
+                stopLocationTracking();
+              }
             }
           });
           
@@ -210,6 +224,11 @@ const AmbulanceDashboard: React.FC = () => {
               status: "available",
               lastUpdated: new Date().toISOString()
             });
+            
+            // Make sure to stop location tracking if there are no active cases
+            if (isTrackingLocation) {
+              stopLocationTracking();
+            }
           }
         }, (error) => {
           console.error("Error fetching active cases:", error);
@@ -232,7 +251,16 @@ const AmbulanceDashboard: React.FC = () => {
     };
     
     fetchActiveCases();
-  }, [user, toast]);
+  }, [user, toast, isTrackingLocation]);
+  
+  // Clean up location tracking on component unmount
+  useEffect(() => {
+    return () => {
+      if (locationTrackingRef.current) {
+        locationTrackingRef.current();
+      }
+    };
+  }, []);
   
   const handleAcceptCase = async (emergencyCase: EmergencyCase) => {
     if (!user || !location.latitude || !location.longitude) {
@@ -262,7 +290,7 @@ const AmbulanceDashboard: React.FC = () => {
       }
       
       await update(caseRef, {
-        status: "en-route",
+        status: "accepted",
         ambulanceId: user.id,
         ambulanceInfo: {
           id: user.id,
@@ -276,7 +304,7 @@ const AmbulanceDashboard: React.FC = () => {
       
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
       await update(ambulanceRef, {
-        status: "en-route",
+        status: "busy",
         severity: emergencyCase.severity,
         caseId: emergencyCase.id,
         destination: {
@@ -286,17 +314,132 @@ const AmbulanceDashboard: React.FC = () => {
         lastUpdated: new Date().toISOString()
       });
       
-      setAmbulanceStatus("en-route");
+      setAmbulanceStatus("busy");
       
       toast({
         title: "Case Accepted",
-        description: `You are now on your way to ${emergencyCase.location?.address || 'the emergency location'}`,
+        description: `You are now handling the case for ${emergencyCase.patientName}`,
       });
     } catch (error) {
       console.error("Error accepting case:", error);
       toast({
         title: "Error",
         description: "Failed to accept the emergency case",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const openGoogleMaps = (emergencyCase: EmergencyCase) => {
+    if (!emergencyCase.hospital?.address && !emergencyCase.hospital) {
+      toast({
+        title: "Missing destination",
+        description: "No hospital has accepted this case yet",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    let destination;
+    if (emergencyCase.hospital?.location?.latitude && emergencyCase.hospital?.location?.longitude) {
+      destination = `${emergencyCase.hospital.location.latitude},${emergencyCase.hospital.location.longitude}`;
+    } else {
+      destination = encodeURIComponent(emergencyCase.hospital?.address || emergencyCase.hospital?.name || "Hospital");
+    }
+    
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`, '_blank');
+  };
+  
+  const startLocationTracking = () => {
+    if (!user) return;
+    
+    // Stop existing tracking if any
+    stopLocationTracking();
+    
+    // Get current location for tracking updates
+    const getCurrentLocation = async () => {
+      if (!location.latitude || !location.longitude) {
+        throw new Error("Location not available");
+      }
+      return {
+        latitude: location.latitude,
+        longitude: location.longitude
+      };
+    };
+    
+    // Start new tracking
+    locationTrackingRef.current = startLocationTracking(
+      user.id, 
+      getCurrentLocation,
+      120000 // Update every 2 minutes (120000 ms)
+    );
+    
+    setIsTrackingLocation(true);
+    
+    toast({
+      title: "Location Tracking Started",
+      description: "Your location will be updated every 2 minutes",
+    });
+  };
+  
+  const stopLocationTracking = () => {
+    if (locationTrackingRef.current) {
+      locationTrackingRef.current();
+      locationTrackingRef.current = null;
+    }
+    setIsTrackingLocation(false);
+  };
+  
+  const handleStartRoute = async (emergencyCase: EmergencyCase) => {
+    if (!user) return;
+    
+    try {
+      const caseRef = ref(db, `emergencyCases/${emergencyCase.id}`);
+      
+      let eta = "Calculating...";
+      let distanceKm = 0;
+      
+      if (emergencyCase.hospital?.location?.latitude && emergencyCase.hospital?.location?.longitude && 
+          location.latitude && location.longitude) {
+        distanceKm = calculateDistance(
+          location.latitude,
+          location.longitude,
+          emergencyCase.hospital.location.latitude,
+          emergencyCase.hospital.location.longitude
+        );
+        
+        eta = formatETA(calculateETA(distanceKm));
+      }
+      
+      await update(caseRef, {
+        status: "en-route",
+        ambulanceInfo: {
+          ...emergencyCase.ambulanceInfo,
+          estimatedArrival: eta
+        },
+        updatedAt: new Date().toISOString()
+      });
+      
+      const ambulanceRef = ref(db, `ambulances/${user.id}`);
+      await update(ambulanceRef, {
+        status: "en-route",
+        lastUpdated: new Date().toISOString()
+      });
+      
+      setAmbulanceStatus("en-route");
+      
+      // Start location tracking
+      startLocationTracking();
+      
+      toast({
+        title: "En Route",
+        description: `You are now en route to ${emergencyCase.hospital?.name || "the hospital"}`,
+      });
+    } catch (error) {
+      console.error("Error updating route status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update route status",
         variant: "destructive",
       });
     }
@@ -319,9 +462,12 @@ const AmbulanceDashboard: React.FC = () => {
         lastUpdated: new Date().toISOString()
       });
       
+      // Stop location tracking since we've arrived
+      stopLocationTracking();
+      
       toast({
         title: "Marked as Arrived",
-        description: `You have marked your arrival at the emergency location.`,
+        description: `You have marked your arrival at the hospital.`,
       });
     } catch (error) {
       console.error("Error marking arrival:", error);
@@ -354,6 +500,11 @@ const AmbulanceDashboard: React.FC = () => {
       });
       
       setAmbulanceStatus("available");
+      
+      // Stop location tracking if still active
+      if (isTrackingLocation) {
+        stopLocationTracking();
+      }
       
       toast({
         title: "Case Completed",
@@ -390,6 +541,11 @@ const AmbulanceDashboard: React.FC = () => {
       });
       
       setAmbulanceStatus("available");
+      
+      // Stop location tracking if still active
+      if (isTrackingLocation) {
+        stopLocationTracking();
+      }
       
       toast({
         title: "Case Canceled",
@@ -713,7 +869,9 @@ const AmbulanceDashboard: React.FC = () => {
               <CardDescription>Current Status</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-gray-500 text-sm">Ready for dispatch</div>
+              <div className={isTrackingLocation ? "text-purple-500 text-sm" : "text-gray-500 text-sm"}>
+                {isTrackingLocation ? "Tracking location..." : "Ready for dispatch"}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -798,6 +956,9 @@ const AmbulanceDashboard: React.FC = () => {
                         <Badge className={getStatusBadgeClass(emergencyCase.status)}>
                           {emergencyCase.status}
                         </Badge>
+                        {isTrackingLocation && emergencyCase.status === "en-route" && (
+                          <Badge className="bg-purple-500">Location Tracking</Badge>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -806,26 +967,67 @@ const AmbulanceDashboard: React.FC = () => {
                       <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <div>
                         <div>Location: {emergencyCase.location?.address}</div>
-                        <div className="text-blue-700">
-                          Destination: {emergencyCase.hospital?.name}
+                        {emergencyCase.hospital ? (
+                          <div className="text-blue-700 font-medium">
+                            Hospital: {emergencyCase.hospital?.name}
+                          </div>
+                        ) : (
+                          <div className="text-yellow-500 italic">
+                            Waiting for hospital assignment
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {emergencyCase.hospital && (
+                      <>
+                        <div className="flex items-center gap-1 text-gray-700">
+                          <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                          <div>Hospital Contact: {emergencyCase.hospital?.contact || "N/A"}</div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-700">
-                      <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                      <div>
-                        Contact Hospital: {emergencyCase.hospital?.contact}
-                      </div>
-                    </div>
+                        
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                          <div className="font-medium text-blue-700 dark:text-blue-300 mb-1">Hospital Information</div>
+                          <div className="text-sm">
+                            <div>Address: {emergencyCase.hospital?.address || "Not provided"}</div>
+                            <div>Available beds: {emergencyCase.hospital?.beds || "Unknown"}</div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </CardContent>
-                  <CardFooter className="justify-end">
+                  <CardFooter className="justify-end gap-2">
+                    {emergencyCase.hospital && emergencyCase.status === "accepted" && (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => openGoogleMaps(emergencyCase)}
+                          className="gap-2"
+                        >
+                          <Navigation className="h-4 w-4" />
+                          Open Maps
+                        </Button>
+                        <Button onClick={() => handleStartRoute(emergencyCase)}>
+                          Start En Route
+                        </Button>
+                      </>
+                    )}
+                    
                     {emergencyCase.status === "en-route" && (
-                      <Button onClick={() => handleMarkArrived(emergencyCase)}>Mark as Arrived</Button>
+                      <Button onClick={() => handleMarkArrived(emergencyCase)}>
+                        Mark as Arrived
+                      </Button>
                     )}
+                    
                     {emergencyCase.status === "arrived" && (
-                      <Button onClick={() => handleCompleteCase(emergencyCase)}>Complete Case</Button>
+                      <Button onClick={() => handleCompleteCase(emergencyCase)}>
+                        Complete Case
+                      </Button>
                     )}
-                    <Button onClick={() => handleCancelCase(emergencyCase)}>Cancel Case</Button>
+                    
+                    <Button variant="outline" onClick={() => handleCancelCase(emergencyCase)}>
+                      Cancel Case
+                    </Button>
                   </CardFooter>
                 </Card>
               ))
@@ -866,15 +1068,11 @@ const AmbulanceDashboard: React.FC = () => {
                       <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <div>
                         <div>Location: {emergencyCase.location?.address}</div>
-                        <div className="text-blue-700">
-                          Destination: {emergencyCase.hospital?.name}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-700">
-                      <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                      <div>
-                        Contact Hospital: {emergencyCase.hospital?.contact}
+                        {emergencyCase.hospital && (
+                          <div className="text-blue-700">
+                            Hospital: {emergencyCase.hospital?.name}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>

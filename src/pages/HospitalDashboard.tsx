@@ -31,6 +31,11 @@ const HospitalDashboard: React.FC = () => {
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [historyCases, setHistoryCases] = useState<EmergencyCase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ambulanceLocations, setAmbulanceLocations] = useState<Record<string, {
+    latitude: number;
+    longitude: number;
+    lastUpdated: string;
+  }>>({});
   const [stats, setStats] = useState({
     pendingCount: 0,
     activeCount: 0,
@@ -40,6 +45,7 @@ const HospitalDashboard: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   
+  // Fetch pending cases that need a hospital
   useEffect(() => {
     if (!user) return;
     
@@ -90,6 +96,7 @@ const HospitalDashboard: React.FC = () => {
     fetchPendingCases();
   }, [user, toast]);
   
+  // Fetch active cases assigned to this hospital
   useEffect(() => {
     if (!user) return;
     
@@ -107,6 +114,11 @@ const HospitalDashboard: React.FC = () => {
           snapshot.forEach((childSnapshot) => {
             const data = childSnapshot.val();
             if (data.status === "accepted" || data.status === "en-route" || data.status === "arrived") {
+              // Add ambulance ID to track location
+              if (data.ambulanceId && !ambulanceLocations[data.ambulanceId]) {
+                fetchAmbulanceLocation(data.ambulanceId);
+              }
+              
               cases.push({
                 id: childSnapshot.key || "",
                 ...data,
@@ -137,8 +149,64 @@ const HospitalDashboard: React.FC = () => {
     };
     
     fetchActiveCases();
-  }, [user, toast]);
+  }, [user, toast, ambulanceLocations]);
   
+  // Fetch ambulance real-time locations for active cases
+  const fetchAmbulanceLocation = (ambulanceId: string) => {
+    const ambulanceRef = ref(db, `ambulances/${ambulanceId}/location`);
+    
+    onValue(ambulanceRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const locationData = snapshot.val();
+        setAmbulanceLocations(prev => ({
+          ...prev,
+          [ambulanceId]: locationData
+        }));
+        
+        // Update ETA for related cases
+        updateETAForAmbulance(ambulanceId, locationData);
+      }
+    });
+  };
+  
+  // Update ETA based on new ambulance location
+  const updateETAForAmbulance = (ambulanceId: string, locationData: any) => {
+    activeCases.forEach(async (activeCase) => {
+      if (activeCase.ambulanceId === ambulanceId && 
+          activeCase.status === "en-route" &&
+          user?.details?.location?.latitude && 
+          user?.details?.location?.longitude) {
+        
+        // Calculate distance between ambulance and hospital
+        const distance = calculateDistance(
+          locationData.latitude,
+          locationData.longitude,
+          user.details.location.latitude,
+          user.details.location.longitude
+        );
+        
+        // Calculate new ETA
+        const eta = formatETA(calculateETA(distance));
+        
+        // Update case with new ETA
+        const caseRef = ref(db, `emergencyCases/${activeCase.id}`);
+        
+        try {
+          await update(caseRef, {
+            ambulanceInfo: {
+              ...activeCase.ambulanceInfo,
+              estimatedArrival: eta,
+              lastLocationUpdate: locationData.lastUpdated
+            }
+          });
+        } catch (error) {
+          console.error("Error updating ETA:", error);
+        }
+      }
+    });
+  };
+  
+  // Fetch completed cases history
   useEffect(() => {
     if (!user) return;
     
@@ -187,6 +255,7 @@ const HospitalDashboard: React.FC = () => {
     fetchHistoryCases();
   }, [user, toast]);
   
+  // Accept a case
   const handleAcceptCase = async (caseId: string) => {
     if (!user) return;
     
@@ -198,6 +267,10 @@ const HospitalDashboard: React.FC = () => {
         contact: user.details?.phone || "Contact Number",
         distance: "Calculating...",
         beds: stats.availableBeds,
+        location: user.details?.location || {
+          latitude: 0,
+          longitude: 0
+        }
       };
       
       const caseRef = ref(db, `emergencyCases/${caseId}`);
@@ -227,6 +300,7 @@ const HospitalDashboard: React.FC = () => {
     }
   };
   
+  // Reject a case
   const handleRejectCase = async (caseId: string) => {
     try {
       toast({
@@ -243,6 +317,37 @@ const HospitalDashboard: React.FC = () => {
         variant: "destructive",
       });
     }
+  };
+  
+  // Open Google Maps for directions
+  const openGoogleMaps = (emergencyCase: EmergencyCase) => {
+    if (!emergencyCase.ambulanceInfo || !ambulanceLocations[emergencyCase.ambulanceId || '']) {
+      toast({
+        title: "Location unavailable",
+        description: "Ambulance location is not available",
+        variant: "destructive", 
+      });
+      return;
+    }
+    
+    const ambulanceLoc = ambulanceLocations[emergencyCase.ambulanceId || ''];
+    window.open(`https://www.google.com/maps/search/?api=1&query=${ambulanceLoc.latitude},${ambulanceLoc.longitude}`, '_blank');
+  };
+  
+  // Calculate time since last location update
+  const getTimeSinceUpdate = (lastUpdated: string) => {
+    const lastUpdate = new Date(lastUpdated);
+    const now = new Date();
+    const diffMs = now.getTime() - lastUpdate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return "Just now";
+    if (diffMins === 1) return "1 minute ago";
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return "1 hour ago";
+    return `${diffHours} hours ago`;
   };
   
   const getSeverityBadgeClass = (severity: string) => {
@@ -529,17 +634,43 @@ const HospitalDashboard: React.FC = () => {
                               <p className="text-sm font-medium">{emergency.ambulanceInfo.vehicleNumber}</p>
                             </div>
                           </div>
-                          <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-lg">
-                            <p className="text-xs text-blue-700 dark:text-blue-400">ETA</p>
-                            <p className="text-sm font-medium">{emergency.ambulanceInfo.estimatedArrival || "Calculating..."}</p>
-                          </div>
+                          
+                          {emergency.status === "en-route" && ambulanceLocations[emergency.ambulanceId || ''] && (
+                            <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-lg border-l-4 border-purple-500">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className="text-xs text-purple-700 dark:text-purple-400">Live ETA</p>
+                                  <p className="text-sm font-medium">{emergency.ambulanceInfo.estimatedArrival || "Calculating..."}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-gray-500">Last update</p>
+                                  <p className="text-xs text-gray-500">
+                                    {getTimeSinceUpdate(ambulanceLocations[emergency.ambulanceId || ''].lastUpdated)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {emergency.status !== "en-route" && (
+                            <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-lg">
+                              <p className="text-xs text-blue-700 dark:text-blue-400">Status</p>
+                              <p className="text-sm font-medium">
+                                {emergency.status === "arrived" ? 
+                                  "Ambulance has arrived" : 
+                                  emergency.ambulanceInfo.estimatedArrival || "Preparing for transport"}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
-                      <Button variant="outline" className="rounded-full">
-                        Contact Ambulance
-                      </Button>
+                      {emergency.status === "en-route" && ambulanceLocations[emergency.ambulanceId || ''] && (
+                        <Button variant="outline" className="rounded-full" onClick={() => openGoogleMaps(emergency)}>
+                          Track Ambulance
+                        </Button>
+                      )}
                       <Button className="rounded-full">
                         Prepare Reception
                       </Button>
