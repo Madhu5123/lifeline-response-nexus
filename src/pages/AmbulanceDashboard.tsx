@@ -978,3 +978,4 @@ const AmbulanceDashboard: React.FC = () => {
                       <>
                         <div className="flex items-center gap-1 text-gray-700">
                           <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                          <div>
