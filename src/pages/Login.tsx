@@ -56,8 +56,11 @@ const Login: React.FC = () => {
     try {
       console.log("Attempting login with:", email);
       await login(email, password);
-      
-      // Show different messages for admin vs regular users
+
+      if (user.status === "pending") {
+        throw new Error("Your account is not verified by the admin yet.");
+      }
+      else{
       if (email === ADMIN_EMAIL) {
         toast({
           title: "Admin Login successful",
@@ -69,6 +72,7 @@ const Login: React.FC = () => {
           description: "Welcome to Lifeline AI",
         });
       }
+    }
     } catch (error: any) {
       setError(error.message || "Failed to login");
       console.error("Login error:", error);
