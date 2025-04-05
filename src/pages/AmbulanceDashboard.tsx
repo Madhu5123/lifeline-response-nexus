@@ -57,7 +57,7 @@ const AmbulanceDashboard: React.FC = () => {
   const { updateLocation, startLocationTracking: dbStartLocationTracking } = useFirebaseDatabase({
     path: 'ambulances'
   });
-  
+
   useEffect(() => {
     if (!user || !location.latitude || !location.longitude) return;
     
@@ -979,3 +979,123 @@ const AmbulanceDashboard: React.FC = () => {
                         <div className="flex items-center gap-1 text-gray-700">
                           <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
                           <div>
+                            Contact: {emergencyCase.hospital.contact || "N/A"}
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2 mt-4">
+                          {emergencyCase.status === "accepted" && (
+                            <Button 
+                              onClick={() => handleStartRoute(emergencyCase)}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Navigation className="mr-2 h-4 w-4" />
+                              Start Route
+                            </Button>
+                          )}
+                          
+                          {emergencyCase.status === "en-route" && (
+                            <Button 
+                              onClick={() => handleMarkArrived(emergencyCase)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Check className="mr-2 h-4 w-4" />
+                              Mark as Arrived
+                            </Button>
+                          )}
+                          
+                          {emergencyCase.status === "arrived" && (
+                            <Button 
+                              onClick={() => handleCompleteCase(emergencyCase)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Check className="mr-2 h-4 w-4" />
+                              Complete Case
+                            </Button>
+                          )}
+                          
+                          <Button 
+                            onClick={() => openGoogleMaps(emergencyCase)}
+                            variant="outline"
+                          >
+                            <MapPin className="mr-2 h-4 w-4" />
+                            View on Map
+                          </Button>
+                          
+                          <Button 
+                            onClick={() => handleCancelCase(emergencyCase)}
+                            variant="outline"
+                            className="text-red-500 hover:bg-red-50"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <p className="text-gray-500">No active cases at this time</p>
+                  <p className="text-sm text-gray-400 mt-2">Accepted cases will appear here</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="history" className="space-y-4">
+            {completedCases.length > 0 ? (
+              completedCases.map(emergencyCase => (
+                <Card key={emergencyCase.id} className="border-l-4 border-l-gray-400">
+                  <CardHeader>
+                    <div className="flex flex-wrap justify-between items-start gap-2">
+                      <div>
+                        <CardTitle>{emergencyCase.patientName}</CardTitle>
+                        <CardDescription>
+                          {emergencyCase.description}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge className={getSeverityBadgeClass(emergencyCase.severity)}>
+                          {emergencyCase.severity?.charAt(0).toUpperCase() + emergencyCase.severity?.slice(1)}
+                        </Badge>
+                        <Badge className={getStatusBadgeClass(emergencyCase.status)}>
+                          {emergencyCase.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Calendar className="h-4 w-4" />
+                      <div>
+                        Completed: {new Date(emergencyCase.updatedAt).toLocaleString()}
+                      </div>
+                    </div>
+                    {emergencyCase.hospital && (
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <MapPin className="h-4 w-4" />
+                        <div>Hospital: {emergencyCase.hospital.name}</div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <p className="text-gray-500">No completed cases yet</p>
+                  <p className="text-sm text-gray-400 mt-2">Your case history will appear here</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default AmbulanceDashboard;
