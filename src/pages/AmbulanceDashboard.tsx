@@ -104,14 +104,16 @@ const AmbulanceDashboard: React.FC = () => {
               hospital.formattedDistance = `${distance.toFixed(1)} km`;
               
               if (distance <= 50) {
-                hospitals.push(hospital);
+                hospitals.push(hospital as HospitalWithLocation);
               }
             }
           });
           
           hospitals.sort((a, b) => {
-            const distanceA = typeof a.distance === 'number' ? a.distance : 0;
-            const distanceB = typeof b.distance === 'number' ? b.distance : 0;
+            const distanceA = typeof a.distance === 'number' ? a.distance : 
+                              typeof a.distance === 'string' ? parseFloat(a.distance) : 0;
+            const distanceB = typeof b.distance === 'number' ? b.distance : 
+                              typeof b.distance === 'string' ? parseFloat(b.distance) : 0;
             return distanceA - distanceB;
           });
 
@@ -339,7 +341,7 @@ const AmbulanceDashboard: React.FC = () => {
     }
     
     let destination;
-    const hospitalLocation = emergencyCase.hospital as HospitalWithLocation;
+    const hospitalLocation = emergencyCase.hospital as unknown as HospitalWithLocation;
     if (hospitalLocation.location?.latitude && hospitalLocation.location?.longitude) {
       destination = `${hospitalLocation.location.latitude},${hospitalLocation.location.longitude}`;
     } else {
@@ -395,7 +397,7 @@ const AmbulanceDashboard: React.FC = () => {
       let eta = "Calculating...";
       let distanceKm = 0;
       
-      const hospitalLocation = emergencyCase.hospital as HospitalWithLocation;
+      const hospitalLocation = emergencyCase.hospital as unknown as HospitalWithLocation;
       if (hospitalLocation?.location?.latitude && hospitalLocation?.location?.longitude && 
           location.latitude && location.longitude) {
         distanceKm = calculateDistance(
@@ -976,133 +978,3 @@ const AmbulanceDashboard: React.FC = () => {
                       <>
                         <div className="flex items-center gap-1 text-gray-700">
                           <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          <div>Hospital Contact: {emergencyCase.hospital?.contact || "N/A"}</div>
-                        </div>
-                        
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                          <div className="font-medium text-blue-700 dark:text-blue-300 mb-1">Hospital Information</div>
-                          <div className="text-sm">
-                            <div>Address: {emergencyCase.hospital?.address || "Not provided"}</div>
-                            <div>Available beds: {emergencyCase.hospital?.beds || "Unknown"}</div>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                  <CardFooter className="justify-end gap-2">
-                    {emergencyCase.hospital && emergencyCase.status === "accepted" && (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => openGoogleMaps(emergencyCase)}
-                          className="gap-2"
-                        >
-                          <Navigation className="h-4 w-4" />
-                          Open Maps
-                        </Button>
-                        <Button onClick={() => handleStartRoute(emergencyCase)}>
-                          Start En Route
-                        </Button>
-                      </>
-                    )}
-                    
-                    {emergencyCase.status === "en-route" && (
-                      <Button onClick={() => handleMarkArrived(emergencyCase)}>
-                        Mark as Arrived
-                      </Button>
-                    )}
-                    
-                    {emergencyCase.status === "arrived" && (
-                      <Button onClick={() => handleCompleteCase(emergencyCase)}>
-                        Complete Case
-                      </Button>
-                    )}
-                    
-                    <Button variant="outline" onClick={() => handleCancelCase(emergencyCase)}>
-                      Cancel Case
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))
-            ) : (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <p className="text-gray-500">No active cases at this time</p>
-                  <p className="text-sm text-gray-400 mt-2">Once you accept a case, it will appear here</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="history" className="space-y-4">
-            {completedCases.length > 0 ? (
-              completedCases.map(emergencyCase => (
-                <Card key={emergencyCase.id} className="border-l-4 border-l-green-500">
-                  <CardHeader>
-                    <div className="flex flex-wrap justify-between items-start gap-2">
-                      <div>
-                        <CardTitle>{emergencyCase.patientName}</CardTitle>
-                        <CardDescription>
-                          {emergencyCase.description}
-                        </CardDescription>
-                      </div>
-                      <div className="flex gap-2">
-                        <Badge className={getSeverityBadgeClass(emergencyCase.severity)}>
-                          {emergencyCase.severity?.charAt(0).toUpperCase() + emergencyCase.severity?.slice(1)}
-                        </Badge>
-                        <Badge className={getStatusBadgeClass(emergencyCase.status)}>
-                          {emergencyCase.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-start gap-1 text-gray-700">
-                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <div>Location: {emergencyCase.location?.address}</div>
-                        {emergencyCase.hospital && (
-                          <div className="text-blue-700">
-                            Hospital: {emergencyCase.hospital?.name}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <p className="text-gray-500">No completed cases yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Once you complete a case, it will be recorded here</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
-        
-        <Card>
-          <CardHeader className="bg-yellow-50 text-yellow-800 border-b border-yellow-200">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 mt-0.5" />
-              <CardTitle className="text-yellow-800">Important Notice</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <p>
-              This is a demo version of the Lifeline Emergency Response app. In a real implementation, this would include:
-            </p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Real-time GPS tracking of your ambulance</li>
-              <li>Automatic updates to the hospital with patient ETA</li>
-              <li>Communication channels with hospitals and dispatch</li>
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
-  );
-};
-
-export default AmbulanceDashboard;

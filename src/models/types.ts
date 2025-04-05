@@ -1,3 +1,4 @@
+
 // User roles 
 export type UserRole = "admin" | "ambulance" | "hospital" | "police" | "unverified";
 
@@ -110,7 +111,7 @@ export interface HospitalWithLocation {
   name: string;
   address: string;
   contact: string;
-  distance?: number;
+  distance?: number | string; // Updated to accept both number and string
   formattedDistance?: string;
   beds?: number;
   organization?: string;
