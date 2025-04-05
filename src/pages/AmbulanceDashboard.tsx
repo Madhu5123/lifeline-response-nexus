@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, MapPin, Phone, AlertCircle, Calendar, Clipboard, Flag } from "lucide-react";
+import { Check, MapPin, Phone, AlertCircle, Calendar, Clipboard, Flag, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
@@ -17,11 +17,17 @@ import {
   orderByChild,
   equalTo,
   get,
-  set
+  set,
+  push
 } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { EmergencyCase, CaseStatus } from "@/models/types";
 import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const AmbulanceDashboard: React.FC = () => {
   const [cases, setCases] = useState<EmergencyCase[]>([]);
@@ -29,6 +35,17 @@ const AmbulanceDashboard: React.FC = () => {
   const [completedCases, setCompletedCases] = useState<EmergencyCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [ambulanceStatus, setAmbulanceStatus] = useState<"available" | "busy" | "offline" | "en-route" | "idle">("available");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [nearbyHospitals, setNearbyHospitals] = useState<any[]>([]);
+  
+  const [newCase, setNewCase] = useState({
+    patientName: "",
+    age: "",
+    gender: "male",
+    symptoms: "",
+    severity: "stable",
+    description: ""
+  });
   
   const { toast } = useToast();
   const { user } = useAuth();
@@ -37,7 +54,6 @@ const AmbulanceDashboard: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     
-    // Update ambulance location every time it changes
     if (location.latitude && location.longitude) {
       try {
         const ambulanceRef = ref(db, `ambulances/${user.id}`);
@@ -46,7 +62,7 @@ const AmbulanceDashboard: React.FC = () => {
             latitude: location.latitude,
             longitude: location.longitude,
             lastUpdated: new Date().toISOString(),
-            address: "Current Location" // This would be replaced with actual reverse geocoding
+            address: "Current Location"
           },
           lastUpdated: new Date().toISOString()
         });
@@ -55,6 +71,49 @@ const AmbulanceDashboard: React.FC = () => {
       }
     }
   }, [location.latitude, location.longitude, user]);
+  
+  useEffect(() => {
+    if (!location.latitude || !location.longitude) return;
+    
+    const fetchHospitals = async () => {
+      try {
+        const hospitalsRef = ref(db, "hospitals");
+        const snapshot = await get(hospitalsRef);
+        
+        if (snapshot.exists()) {
+          const hospitals: any[] = [];
+          
+          snapshot.forEach((childSnapshot) => {
+            const hospital = childSnapshot.val();
+            hospital.id = childSnapshot.key;
+            
+            if (hospital.location?.latitude && hospital.location?.longitude) {
+              const distance = calculateDistance(
+                location.latitude!,
+                location.longitude!,
+                hospital.location.latitude,
+                hospital.location.longitude
+              );
+              
+              hospital.distance = distance;
+              hospital.formattedDistance = `${distance.toFixed(1)} km`;
+              
+              if (distance <= 50) {
+                hospitals.push(hospital);
+              }
+            }
+          });
+          
+          hospitals.sort((a, b) => a.distance - b.distance);
+          setNearbyHospitals(hospitals);
+        }
+      } catch (error) {
+        console.error("Error fetching hospitals:", error);
+      }
+    };
+    
+    fetchHospitals();
+  }, [location.latitude, location.longitude]);
   
   useEffect(() => {
     if (!user) return;
@@ -136,7 +195,6 @@ const AmbulanceDashboard: React.FC = () => {
                 ...caseData,
               } as EmergencyCase);
               
-              // Update ambulance status if we have active cases
               setAmbulanceStatus(caseData.status === "en-route" ? "en-route" : "busy");
             }
           });
@@ -144,11 +202,9 @@ const AmbulanceDashboard: React.FC = () => {
           setActiveCases(activeEmergencyCases);
           setCompletedCases(completedEmergencyCases);
           
-          // Update ambulance status to available if no active cases
           if (activeEmergencyCases.length === 0) {
             setAmbulanceStatus("available");
             
-            // Update status in database
             const ambulanceRef = ref(db, `ambulances/${user.id}`);
             update(ambulanceRef, {
               status: "available",
@@ -178,7 +234,6 @@ const AmbulanceDashboard: React.FC = () => {
     fetchActiveCases();
   }, [user, toast]);
   
-  // Accept case handler
   const handleAcceptCase = async (emergencyCase: EmergencyCase) => {
     if (!user || !location.latitude || !location.longitude) {
       toast({
@@ -192,7 +247,6 @@ const AmbulanceDashboard: React.FC = () => {
     try {
       const caseRef = ref(db, `emergencyCases/${emergencyCase.id}`);
       
-      // Calculate ETA based on distance
       let eta = "Unknown";
       let distanceKm = 0;
       
@@ -207,7 +261,6 @@ const AmbulanceDashboard: React.FC = () => {
         eta = formatETA(calculateETA(distanceKm));
       }
       
-      // Update case with ambulance info
       await update(caseRef, {
         status: "en-route",
         ambulanceId: user.id,
@@ -221,7 +274,6 @@ const AmbulanceDashboard: React.FC = () => {
         updatedAt: new Date().toISOString()
       });
       
-      // Update ambulance status
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
       await update(ambulanceRef, {
         status: "en-route",
@@ -250,7 +302,6 @@ const AmbulanceDashboard: React.FC = () => {
     }
   };
   
-  // Mark as arrived handler
   const handleMarkArrived = async (emergencyCase: EmergencyCase) => {
     if (!user) return;
     
@@ -262,7 +313,6 @@ const AmbulanceDashboard: React.FC = () => {
         updatedAt: new Date().toISOString()
       });
       
-      // Update ambulance status
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
       await update(ambulanceRef, {
         status: "arrived",
@@ -283,7 +333,6 @@ const AmbulanceDashboard: React.FC = () => {
     }
   };
   
-  // Complete case handler
   const handleCompleteCase = async (emergencyCase: EmergencyCase) => {
     if (!user) return;
     
@@ -295,7 +344,6 @@ const AmbulanceDashboard: React.FC = () => {
         updatedAt: new Date().toISOString()
       });
       
-      // Update ambulance status
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
       await update(ambulanceRef, {
         status: "available",
@@ -321,7 +369,6 @@ const AmbulanceDashboard: React.FC = () => {
     }
   };
   
-  // Cancel case handler
   const handleCancelCase = async (emergencyCase: EmergencyCase) => {
     if (!user) return;
     
@@ -333,7 +380,6 @@ const AmbulanceDashboard: React.FC = () => {
         updatedAt: new Date().toISOString()
       });
       
-      // Update ambulance status
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
       await update(ambulanceRef, {
         status: "available",
@@ -358,8 +404,103 @@ const AmbulanceDashboard: React.FC = () => {
       });
     }
   };
-
-  // Helper functions for UI
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewCase(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const handleSelectChange = (name: string, value: string) => {
+    setNewCase(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const handleCreateCase = async () => {
+    if (!user || !location.latitude || !location.longitude) {
+      toast({
+        title: "Location required",
+        description: "Your location is needed to create a case. Please enable location services.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { patientName, age, gender, symptoms, severity, description } = newCase;
+      
+      if (!patientName || !age || !symptoms || !description) {
+        toast({
+          title: "Missing information",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const casesRef = ref(db, "emergencyCases");
+      const newCaseRef = push(casesRef);
+      
+      const caseData = {
+        patientName,
+        age: parseInt(age),
+        gender,
+        symptoms,
+        severity,
+        description,
+        type: "medical",
+        priority: severity === "critical" ? "critical" : severity === "serious" ? "high" : "medium",
+        status: "pending" as CaseStatus,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: "Current Location"
+        },
+        reportedBy: {
+          id: user.id,
+          name: user.name,
+          role: "ambulance"
+        },
+        ambulanceId: user.id,
+        ambulanceInfo: {
+          id: user.id,
+          driver: user.name,
+          vehicleNumber: user.details?.vehicleNumber || "Unknown"
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await set(newCaseRef, caseData);
+      
+      toast({
+        title: "Case Created",
+        description: "The emergency case has been created and notified to nearby hospitals",
+      });
+      
+      setIsDialogOpen(false);
+      setNewCase({
+        patientName: "",
+        age: "",
+        gender: "male",
+        symptoms: "",
+        severity: "stable",
+        description: ""
+      });
+    } catch (error) {
+      console.error("Error creating case:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create emergency case",
+        variant: "destructive",
+      });
+    }
+  };
+  
   const getSeverityBadgeClass = (severity: string | undefined) => {
     if (!severity) return "bg-gray-500 text-white";
     switch(severity) {
@@ -386,7 +527,6 @@ const AmbulanceDashboard: React.FC = () => {
     return `${distance.toFixed(1)} km`;
   };
   
-  // Calculate distances for cases based on current location
   const casesWithDistance = cases.map(emergencyCase => {
     let distance = 0;
     if (location.latitude && location.longitude && emergencyCase.location?.latitude && emergencyCase.location?.longitude) {
@@ -407,6 +547,135 @@ const AmbulanceDashboard: React.FC = () => {
   return (
     <DashboardLayout title="Ambulance Dashboard" role="ambulance">
       <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Ambulance Control Panel</h1>
+          
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span>New Emergency Case</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Create New Emergency Case</DialogTitle>
+                <DialogDescription>
+                  Enter the patient details to create a new emergency case. This will be sent to nearby hospitals.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="patientName">Patient Name</Label>
+                    <Input
+                      id="patientName"
+                      name="patientName"
+                      value={newCase.patientName}
+                      onChange={handleInputChange}
+                      placeholder="Full name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="age">Age</Label>
+                    <Input
+                      id="age"
+                      name="age"
+                      type="number"
+                      value={newCase.age}
+                      onChange={handleInputChange}
+                      placeholder="Patient age"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gender</Label>
+                    <Select
+                      value={newCase.gender}
+                      onValueChange={(value) => handleSelectChange("gender", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="severity">Severity</Label>
+                    <Select
+                      value={newCase.severity}
+                      onValueChange={(value) => handleSelectChange("severity", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select severity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="stable">Stable</SelectItem>
+                        <SelectItem value="serious">Serious</SelectItem>
+                        <SelectItem value="critical">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="symptoms">Symptoms</Label>
+                  <Input
+                    id="symptoms"
+                    name="symptoms"
+                    value={newCase.symptoms}
+                    onChange={handleInputChange}
+                    placeholder="Main symptoms"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    value={newCase.description}
+                    onChange={handleInputChange}
+                    placeholder="Detailed description of the emergency"
+                    rows={3}
+                  />
+                </div>
+                
+                {nearbyHospitals.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Nearby Hospitals ({nearbyHospitals.length})</Label>
+                    <div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded text-sm">
+                      {nearbyHospitals.map((hospital) => (
+                        <div key={hospital.id} className="flex justify-between py-1 border-b">
+                          <span>{hospital.name || hospital.organization}</span>
+                          <span className="text-blue-600">{hospital.formattedDistance}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      This emergency will be sent to these hospitals based on your current location.
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateCase}>Create Emergency Case</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+        
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
@@ -504,7 +773,7 @@ const AmbulanceDashboard: React.FC = () => {
               <Card>
                 <CardContent className="p-8 text-center">
                   <p className="text-gray-500">No available cases at this time</p>
-                  <p className="text-sm text-gray-400 mt-2">Check back later for new emergencies</p>
+                  <p className="text-sm text-gray-400 mt-2">Click "New Emergency Case" button to create a case</p>
                 </CardContent>
               </Card>
             )}
