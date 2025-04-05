@@ -18,10 +18,31 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [marker, setMarker] = useState<google.maps.Marker | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  
+  // Check if Google Maps API is loaded
+  useEffect(() => {
+    // If Google Maps is already loaded when the component mounts
+    if (window.google && window.google.maps) {
+      setIsGoogleMapsLoaded(true);
+      return;
+    }
+    
+    // If not, listen for the custom event
+    const handleGoogleMapsLoaded = () => {
+      setIsGoogleMapsLoaded(true);
+    };
+    
+    window.addEventListener('google-maps-loaded', handleGoogleMapsLoaded);
+    
+    return () => {
+      window.removeEventListener('google-maps-loaded', handleGoogleMapsLoaded);
+    };
+  }, []);
   
   useEffect(() => {
-    // Check if Google Maps API is loaded
-    if (window.google && window.google.maps && mapRef.current && !map) {
+    // Wait until Google Maps is loaded and map ref is available
+    if (isGoogleMapsLoaded && mapRef.current && !map) {
       // Initialize the map
       const initialPosition = {
         lat: initialLatitude || 0,
@@ -51,12 +72,12 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         initializeMap(initialPosition);
       }
     }
-  }, [initialLatitude, initialLongitude, map]);
+  }, [initialLatitude, initialLongitude, map, isGoogleMapsLoaded]);
   
   const initializeMap = (position: google.maps.LatLngLiteral) => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !window.google) return;
     
-    const newMap = new google.maps.Map(mapRef.current, {
+    const newMap = new window.google.maps.Map(mapRef.current, {
       center: position,
       zoom: 15,
       mapTypeControl: false,
@@ -64,11 +85,11 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       fullscreenControl: true
     });
     
-    const newMarker = new google.maps.Marker({
+    const newMarker = new window.google.maps.Marker({
       position,
       map: newMap,
       draggable: true,
-      animation: google.maps.Animation.DROP
+      animation: window.google.maps.Animation.DROP
     });
     
     // Add click event to the map
@@ -76,7 +97,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       if (event.latLng) {
         newMarker.setPosition(event.latLng);
         // Get address from coordinates
-        const geocoder = new google.maps.Geocoder();
+        const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: event.latLng }, (results, status) => {
           if (status === 'OK' && results?.[0]) {
             const address = results[0].formatted_address;
@@ -93,7 +114,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       const position = newMarker.getPosition();
       if (position) {
         // Get address from coordinates
-        const geocoder = new google.maps.Geocoder();
+        const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: position }, (results, status) => {
           if (status === 'OK' && results?.[0]) {
             const address = results[0].formatted_address;
@@ -121,7 +142,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
           marker.setPosition(currentPosition);
           
           // Get address from coordinates
-          const geocoder = new google.maps.Geocoder();
+          const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode({ location: currentPosition }, (results, status) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
