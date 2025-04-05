@@ -4,11 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, MapPin, Phone, AlertCircle, Calendar, Clipboard, Flag, Plus, Navigation } from "lucide-react";
+import { Check, MapPin, Phone, Calendar, Plus, Navigation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useFirebaseDatabase } from "@/hooks/use-firebase-database";
+import MapLocationPicker from "@/components/MapLocationPicker";
 import { 
   ref,
   onValue,
@@ -29,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const AmbulanceDashboard: React.FC = () => {
   const [cases, setCases] = useState<EmergencyCase[]>([]);
@@ -47,7 +49,13 @@ const AmbulanceDashboard: React.FC = () => {
     gender: "male",
     symptoms: "",
     severity: "stable",
-    description: ""
+    description: "",
+    useCustomLocation: false,
+    customLocation: {
+      latitude: null as number | null,
+      longitude: null as number | null,
+      address: ""
+    }
   });
   
   const { toast } = useToast();
@@ -571,18 +579,40 @@ const AmbulanceDashboard: React.FC = () => {
     }));
   };
   
+  const handleLocationToggle = () => {
+    setNewCase(prev => ({
+      ...prev,
+      useCustomLocation: !prev.useCustomLocation
+    }));
+  };
+  
+  const handleLocationSelect = (latitude: number, longitude: number, address: string) => {
+    setNewCase(prev => ({
+      ...prev,
+      customLocation: {
+        latitude,
+        longitude,
+        address: address || "Selected Location"
+      }
+    }));
+  };
+  
   const handleCreateCase = async () => {
-    if (!user || !location.latitude || !location.longitude) {
+    if (!user) return;
+
+    const needsLocation = !newCase.useCustomLocation && (!location.latitude || !location.longitude);
+    
+    if (needsLocation) {
       toast({
         title: "Location required",
-        description: "Your location is needed to create a case. Please enable location services.",
+        description: "Your location is needed to create a case. Please enable location services or select a location on the map.",
         variant: "destructive",
       });
       return;
     }
     
     try {
-      const { patientName, age, gender, symptoms, severity, description } = newCase;
+      const { patientName, age, gender, symptoms, severity, description, useCustomLocation, customLocation } = newCase;
       
       if (!patientName || !age || !symptoms || !description) {
         toast({
@@ -596,6 +626,18 @@ const AmbulanceDashboard: React.FC = () => {
       const casesRef = ref(db, "emergencyCases");
       const newCaseRef = push(casesRef);
       
+      const locationData = useCustomLocation && customLocation.latitude && customLocation.longitude
+        ? {
+            latitude: customLocation.latitude,
+            longitude: customLocation.longitude,
+            address: customLocation.address || "Selected Location"
+          }
+        : {
+            latitude: location.latitude!,
+            longitude: location.longitude!,
+            address: "Current Location"
+          };
+      
       const caseData = {
         patientName,
         age: parseInt(age),
@@ -606,11 +648,7 @@ const AmbulanceDashboard: React.FC = () => {
         type: "medical",
         priority: severity === "critical" ? "critical" : severity === "serious" ? "high" : "medium",
         status: "pending" as CaseStatus,
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          address: "Current Location"
-        },
+        location: locationData,
         reportedBy: {
           id: user.id,
           name: user.name,
@@ -640,7 +678,13 @@ const AmbulanceDashboard: React.FC = () => {
         gender: "male",
         symptoms: "",
         severity: "stable",
-        description: ""
+        description: "",
+        useCustomLocation: false,
+        customLocation: {
+          latitude: null,
+          longitude: null,
+          address: ""
+        }
       });
     } catch (error) {
       console.error("Error creating case:", error);
@@ -708,7 +752,7 @@ const AmbulanceDashboard: React.FC = () => {
                 <span>New Emergency Case</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Emergency Case</DialogTitle>
                 <DialogDescription>
@@ -799,6 +843,32 @@ const AmbulanceDashboard: React.FC = () => {
                     placeholder="Detailed description of the emergency"
                     rows={3}
                   />
+                </div>
+                
+                {/* Location Selection */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="useCustomLocation" 
+                      checked={newCase.useCustomLocation} 
+                      onCheckedChange={handleLocationToggle}
+                    />
+                    <Label htmlFor="useCustomLocation">Select a custom location on the map</Label>
+                  </div>
+                  
+                  {newCase.useCustomLocation && (
+                    <MapLocationPicker 
+                      onLocationSelect={handleLocationSelect}
+                      initialLatitude={location.latitude}
+                      initialLongitude={location.longitude}
+                    />
+                  )}
+                  
+                  {newCase.useCustomLocation && newCase.customLocation.latitude && (
+                    <div className="mt-2 text-sm text-blue-600">
+                      Selected location: {newCase.customLocation.address}
+                    </div>
+                  )}
                 </div>
                 
                 {nearbyHospitals.length > 0 && (
