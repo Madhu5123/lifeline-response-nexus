@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,6 @@ const Login: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Add console logs to debug navigation
   useEffect(() => {
     console.log("Login component - Auth state changed:", { isAuthenticated, user });
     
@@ -56,23 +54,22 @@ const Login: React.FC = () => {
     try {
       console.log("Attempting login with:", email);
       await login(email, password);
-
-      if (user.status === "pending") {
+      
+      if (user && user.status === "pending") {
         throw new Error("Your account is not verified by the admin yet.");
-      }
-      else{
-      if (email === ADMIN_EMAIL) {
-        toast({
-          title: "Admin Login successful",
-          description: "Welcome to Lifeline AI Admin Panel",
-        });
       } else {
-        toast({
-          title: "Login successful",
-          description: "Welcome to Lifeline AI",
-        });
+        if (email === ADMIN_EMAIL) {
+          toast({
+            title: "Admin Login successful",
+            description: "Welcome to Lifeline AI Admin Panel",
+          });
+        } else {
+          toast({
+            title: "Login successful",
+            description: "Welcome to Lifeline AI",
+          });
+        }
       }
-    }
     } catch (error: any) {
       setError(error.message || "Failed to login");
       console.error("Login error:", error);

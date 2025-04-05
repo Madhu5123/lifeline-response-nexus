@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext, ReactNode } from "react";
 import { 
   createUserWithEmailAndPassword, 
@@ -134,7 +135,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("Firebase login successful:", userCredential.user.email);
 
-      await refreshUserData();
+      await fetchUserData(userCredential.user.uid);
+      
+      const userData = user;
+      if (userData && userData.status === "pending") {
+        throw new Error("Your account is not verified by the admin yet.");
+      }
     } catch (error: any) {
       console.error("Login error:", error);
       let errorMessage = "Login failed. Please check your credentials.";

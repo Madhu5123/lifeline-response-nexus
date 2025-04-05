@@ -84,7 +84,8 @@ const App = () => {
           toast({
             title: "Limited Connectivity",
             description: "Operating in offline mode. Some features may be limited until connection is restored.",
-            variant: "warning",
+            // Fix the TypeScript error by using "default" instead of "warning"
+            variant: "default",
             duration: 5000,
           });
           // Still proceed even with warnings
