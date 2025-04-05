@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode } from "react";
 import { 
   createUserWithEmailAndPassword, 
@@ -7,7 +6,7 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from "firebase/auth";
-import { ref, set, get, onValue, off } from "firebase/database";
+import { ref, set, get, off } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
 import { User, UserRole, UserDetails } from "@/models/types";
 import { useToast } from "@/hooks/use-toast";
@@ -32,7 +31,6 @@ interface RegisterData {
   details?: UserDetails;
 }
 
-// Admin user object
 const ADMIN_USER: User = {
   id: "admin-user-id",
   email: ADMIN_EMAIL,
@@ -67,168 +65,136 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
-  console.log("AuthProvider rendered, current user state:", { user, isAuthenticated: !!user && (user.status === "approved" || user.role === "admin") });
+  console.log("AuthProvider rendered:", { user, isAuthenticated: !!user && (user.status === "approved" || user.role === "admin") });
 
   // Effect for Firebase auth state
   useEffect(() => {
     console.log("Setting up Firebase auth state listener");
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Firebase auth state changed:", firebaseUser?.email);
       setCurrentUser(firebaseUser);
-      
+
       if (firebaseUser) {
-        try {
-          // Fetch user data from Realtime DB
-          const userRef = ref(db, `users/${firebaseUser.uid}`);
-          onValue(userRef, (snapshot) => {
-            if (snapshot.exists()) {
-              const userData = snapshot.val();
-              console.log("User data from Firebase:", userData);
-              setUser({
-                id: firebaseUser.uid,
-                email: firebaseUser.email || "",
-                name: userData.name || "",
-                role: userData.role || "unverified",
-                status: userData.status || "pending",
-                details: userData.details || {},
-              });
-            } else {
-              console.log("No user data found in database");
-              setUser(null);
-            }
-            setIsLoading(false);
-          }, (error) => {
-            console.error("Error fetching user data:", error);
-            setIsLoading(false);
-          });
-        } catch (error) {
-          console.error("Error setting up user data listener:", error);
-          setIsLoading(false);
-        }
+        await fetchUserData(firebaseUser.uid);
       } else {
-        // If no firebase user and not admin, set user to null
-        if (user?.email !== ADMIN_EMAIL) {
-          setUser(null);
-        }
+        console.log("No authenticated user found");
+        setUser(null);
         setIsLoading(false);
       }
     });
-    
-    return () => unsubscribe();
-  }, [user?.email]);
 
-  const refreshUserData = async () => {
-    if (!currentUser) return;
-    
+    return () => unsubscribe();
+  }, []);
+
+  const fetchUserData = async (userId: string) => {
     try {
-      const userRef = ref(db, `users/${currentUser.uid}`);
+      console.log("Fetching user data from Firebase...");
+      const userRef = ref(db, `users/${userId}`);
       const snapshot = await get(userRef);
-      
+
       if (snapshot.exists()) {
         const userData = snapshot.val();
+        console.log("User data from Firebase:", userData);
         setUser({
-          id: currentUser.uid,
-          email: currentUser.email || "",
+          id: userId,
+          email: userData.email || "",
           name: userData.name || "",
           role: userData.role || "unverified",
           status: userData.status || "pending",
           details: userData.details || {},
         });
+      } else {
+        console.log("No user data found in database");
+        setUser(null);
       }
     } catch (error) {
-      console.error("Error refreshing user data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to refresh user data.",
-        variant: "destructive",
-      });
+      console.error("Error fetching user data:", error);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const refreshUserData = async () => {
+    if (!currentUser) return;
+    await fetchUserData(currentUser.uid);
   };
 
   const login = async (email: string, password: string) => {
     try {
       console.log("Login attempt:", email);
-      // Check if using admin credentials
+
       if (isAdminCredentials(email, password)) {
         console.log("Admin login detected");
         setUser(ADMIN_USER);
-        setCurrentUser(null); // No firebase user for admin
+        setCurrentUser(null);
         return;
       }
-      
-      // Regular Firebase auth login
+
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("Firebase login successful:", userCredential.user.email);
-      
-      // For regular users, we'll get their data through the auth state change listener
+
+      await refreshUserData();
     } catch (error: any) {
       console.error("Login error:", error);
-      // Handle specific Firebase auth errors
       let errorMessage = "Login failed. Please check your credentials.";
-      
+
       if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
         errorMessage = "Invalid email or password.";
       } else if (error.code === "auth/too-many-requests") {
         errorMessage = "Too many unsuccessful login attempts. Please try again later.";
       }
-      
+
       throw new Error(errorMessage);
     }
   };
 
   const register = async ({ name, email, password, role, details }: RegisterData) => {
     try {
-      // Create Firebase auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      // Create user in Realtime Database
+
       await set(ref(db, `users/${user.uid}`), {
         name,
         email,
         role,
-        status: "pending", // New users start with pending status
+        status: "pending",
         createdAt: new Date().toISOString(),
         details: details || {},
       });
-      
-      // Also add to the admin approval queue
-      await set(ref(db, `pendingApprovals/${user.uid}`), {
-        userId: user.uid,
-        name,
-        email,
-        role,
-        submittedAt: new Date().toISOString(),
-      });
-      
+
+      // await set(ref(db, `pendingApprovals/${user.uid}`), {
+      //   userId: user.uid,
+      //   name,
+      //   email,
+      //   role,
+      //   submittedAt: new Date().toISOString(),
+      // });
     } catch (error: any) {
-      // Handle specific Firebase auth errors
       let errorMessage = "Registration failed. Please try again.";
-      
+
       if (error.code === "auth/email-already-in-use") {
         errorMessage = "Email already in use.";
       } else if (error.code === "auth/weak-password") {
         errorMessage = "Password is too weak.";
       }
-      
+
       throw new Error(errorMessage);
     }
   };
 
   const logout = async () => {
     try {
-      // If admin user, just clear the state
       if (user?.email === ADMIN_EMAIL) {
         setUser(null);
         return;
       }
-      
-      // Clean up any user data listeners
+
       if (currentUser) {
         const userRef = ref(db, `users/${currentUser.uid}`);
         off(userRef);
       }
-      
+
       await firebaseSignOut(auth);
       setUser(null);
     } catch (error) {
@@ -240,7 +206,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value = {
     currentUser,
     user,
-    isAuthenticated: !!user && (user.status === "approved" || user.role === "admin"),
+    isAuthenticated: !!user && !!user.role && (user.status === "approved" || user.role === "admin"),
     isLoading,
     login,
     register,
