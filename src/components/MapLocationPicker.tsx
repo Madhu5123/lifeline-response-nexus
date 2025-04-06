@@ -2,12 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
-// Explicitly define types for Google Maps to help TypeScript recognize them
-type GoogleMap = google.maps.Map;
-type GoogleMarker = google.maps.Marker;
-type LatLngLiteral = google.maps.LatLngLiteral;
 
 interface MapLocationPickerProps {
   onLocationSelect: (latitude: number, longitude: number, address: string) => void;
@@ -21,37 +15,21 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   initialLongitude
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<GoogleMap | null>(null);
-  const [marker, setMarker] = useState<GoogleMarker | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [marker, setMarker] = useState<google.maps.Marker | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
-  const { toast } = useToast();
   
+  // Check if Google Maps API is loaded
   useEffect(() => {
-    console.log("Checking Google Maps API...");
-    
-    const scriptElement = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
-    const apiKeySet = scriptElement?.getAttribute('src')?.includes('key=AIzaSyCn9PtxnG4vnNEy_-azKJoWCz5nYVxF3IY');
-    
-    console.log("API Key set:", apiKeySet);
-    
-    if (!apiKeySet) {
-      console.error("Google Maps API key is not properly configured in index.html");
-      toast({
-        title: "Map Error",
-        description: "Google Maps API key is not configured. Contact the administrator.",
-        variant: "destructive",
-      });
-    }
-
+    // If Google Maps is already loaded when the component mounts
     if (window.google && window.google.maps) {
-      console.log("Google Maps API already loaded");
       setIsGoogleMapsLoaded(true);
       return;
     }
     
+    // If not, listen for the custom event
     const handleGoogleMapsLoaded = () => {
-      console.log("Google Maps API loaded event received");
       setIsGoogleMapsLoaded(true);
     };
     
@@ -60,30 +38,30 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     return () => {
       window.removeEventListener('google-maps-loaded', handleGoogleMapsLoaded);
     };
-  }, [toast]);
+  }, []);
   
   useEffect(() => {
+    // Wait until Google Maps is loaded and map ref is available
     if (isGoogleMapsLoaded && mapRef.current && !map) {
-      console.log("Initializing map with Google Maps API");
-      
-      const initialPosition: LatLngLiteral = {
-        lat: initialLatitude ?? 0,
-        lng: initialLongitude ?? 0
+      // Initialize the map
+      const initialPosition = {
+        lat: initialLatitude || 0,
+        lng: initialLongitude || 0
       };
       
+      // If no initial position, try to get current position
       if (!initialLatitude || !initialLongitude) {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
-              console.log("Got current position:", position.coords);
               const currentPosition = {
                 lat: position.coords.latitude,
                 lng: position.coords.longitude
               };
               initializeMap(currentPosition);
             },
-            (error) => {
-              console.error("Geolocation error:", error);
+            () => {
+              // Fallback to a default position if geolocation is not available
               initializeMap(initialPosition);
             }
           );
@@ -96,73 +74,59 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     }
   }, [initialLatitude, initialLongitude, map, isGoogleMapsLoaded]);
   
-  const initializeMap = (position: LatLngLiteral) => {
-    if (!mapRef.current || !window.google || !window.google.maps) {
-      console.error("Google Maps API not loaded or map ref not available");
-      return;
-    }
+  const initializeMap = (position: google.maps.LatLngLiteral) => {
+    if (!mapRef.current || !window.google) return;
     
-    try {
-      console.log("Creating new Google Map with position:", position);
-      const newMap = new window.google.maps.Map(mapRef.current, {
-        center: position,
-        zoom: 15,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: true
-      });
-      
-      const newMarker = new window.google.maps.Marker({
-        position,
-        map: newMap,
-        draggable: true,
-        animation: window.google.maps.Animation.DROP
-      });
-      
-      newMap.addListener('click', (event: any) => {
-        if (event.latLng) {
-          console.log("Map clicked at:", event.latLng.lat(), event.latLng.lng());
-          newMarker.setPosition(event.latLng);
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: event.latLng }, (results: any, status: string) => {
-            if (status === 'OK' && results?.[0]) {
-              const address = results[0].formatted_address;
-              console.log("Geocoded address:", address);
-              if (event.latLng) {
-                onLocationSelect(event.latLng.lat(), event.latLng.lng(), address);
-              }
+    const newMap = new window.google.maps.Map(mapRef.current, {
+      center: position,
+      zoom: 15,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true
+    });
+    
+    const newMarker = new window.google.maps.Marker({
+      position,
+      map: newMap,
+      draggable: true,
+      animation: window.google.maps.Animation.DROP
+    });
+    
+    // Add click event to the map
+    newMap.addListener('click', (event: any) => {
+      if (event.latLng) {
+        newMarker.setPosition(event.latLng);
+        // Get address from coordinates
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: event.latLng }, (results, status) => {
+          if (status === 'OK' && results?.[0]) {
+            const address = results[0].formatted_address;
+            if (event.latLng) {
+              onLocationSelect(event.latLng.lat(), event.latLng.lng(), address);
             }
-          });
-        }
-      });
-      
-      newMarker.addListener('dragend', () => {
-        const position = newMarker.getPosition();
-        if (position) {
-          console.log("Marker dragged to:", position.lat(), position.lng());
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: position }, (results: any, status: string) => {
-            if (status === 'OK' && results?.[0]) {
-              const address = results[0].formatted_address;
-              console.log("Geocoded address after drag:", address);
-              onLocationSelect(position.lat(), position.lng(), address);
-            }
-          });
-        }
-      });
-      
-      setMap(newMap);
-      setMarker(newMarker);
-      setIsMapReady(true);
-      console.log("Map initialization complete");
-    } catch (error) {
-      console.error("Error initializing Google Maps:", error);
-      toast({
-        title: "Map Error",
-        description: "Failed to initialize the map. Please try again.",
-        variant: "destructive",
-      });
-    }
+          }
+        });
+      }
+    });
+    
+    // Add dragend event to the marker
+    newMarker.addListener('dragend', () => {
+      const position = newMarker.getPosition();
+      if (position) {
+        // Get address from coordinates
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: position }, (results, status) => {
+          if (status === 'OK' && results?.[0]) {
+            const address = results[0].formatted_address;
+            onLocationSelect(position.lat(), position.lng(), address);
+          }
+        });
+      }
+    });
+    
+    setMap(newMap);
+    setMarker(newMarker);
+    setIsMapReady(true);
   };
   
   const handleUseCurrentLocation = () => {
@@ -177,8 +141,9 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
           map.setCenter(currentPosition);
           marker.setPosition(currentPosition);
           
+          // Get address from coordinates
           const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: currentPosition }, (results: any, status: string) => {
+          geocoder.geocode({ location: currentPosition }, (results, status) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
               onLocationSelect(currentPosition.lat, currentPosition.lng, address);
@@ -189,11 +154,6 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         },
         (error) => {
           console.error("Error getting current position:", error);
-          toast({
-            title: "Location Error",
-            description: "Unable to get your current location. Please enable location services.",
-            variant: "destructive",
-          });
         }
       );
     }
