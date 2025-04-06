@@ -37,7 +37,7 @@ const ROLE_FIELDS: {
 } = {
   'ambulance': {
     images: [
-      { id: 'driverLicense', label: 'Driving License' },
+      { id: 'vehicleNumber', label: 'Vehicle Number' },
       { id: 'ambulancePhoto', label: 'Ambulance Photo' },
       { id: 'driverWithAmbulance', label: 'Photo of Driver with Ambulance' }
     ],
@@ -66,7 +66,7 @@ const Register: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<UserRole | "">("");
   const [organization, setOrganization] = useState("");
-  const [licenseNumber, setLicenseNumber] = useState("");
+  const [vehicleNumber, setvehicleNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [position, setPosition] = useState("");
@@ -202,7 +202,7 @@ const Register: React.FC = () => {
         role,
         details: {
           organization,
-          licenseNumber,
+          vehicleNumber,
           address,
           phone,
           position,
@@ -234,13 +234,13 @@ const Register: React.FC = () => {
       <>
         {role === "ambulance" && (
           <div className="space-y-2">
-            <Label htmlFor="licenseNumber">Driver License Number</Label>
+            <Label htmlFor="vehicleNumber">Vehicle Number</Label>
             <div className="relative">
               <Input
-                id="licenseNumber"
-                placeholder="Enter your license number"
-                value={licenseNumber}
-                onChange={(e) => setLicenseNumber(e.target.value)}
+                id="vehicleNumber"
+                placeholder="Enter your vechile number"
+                value={vehicleNumber}
+                onChange={(e) => setvehicleNumber(e.target.value)}
                 className="pl-10 rounded-xl"
                 required
               />

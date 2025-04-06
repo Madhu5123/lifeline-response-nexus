@@ -293,7 +293,7 @@ const AmbulanceDashboard: React.FC = () => {
       }
       
       await update(caseRef, {
-        status: "accepted",
+        status: "pending",
         ambulanceId: user.id,
         ambulanceInfo: {
           id: user.id,
