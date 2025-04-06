@@ -24,12 +24,16 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   
   // Check if Google Maps API is loaded
   useEffect(() => {
+    console.log("Checking Google Maps API...");
+    
     // Check if the API key is set
     const scriptElement = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
-    const apiKeySet = scriptElement?.getAttribute('src')?.includes('key=YOUR_API_KEY_HERE') === false;
+    const apiKeySet = scriptElement?.getAttribute('src')?.includes('key=AIzaSyCn9PtxnG4vnNEy_-azKJoWCz5nYVxF3IY');
+    
+    console.log("API Key set:", apiKeySet);
     
     if (!apiKeySet) {
-      console.error("Google Maps API key is not set. Please replace YOUR_API_KEY_HERE with a valid API key in index.html");
+      console.error("Google Maps API key is not properly configured in index.html");
       toast({
         title: "Map Error",
         description: "Google Maps API key is not configured. Contact the administrator.",
@@ -39,12 +43,14 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
 
     // If Google Maps is already loaded when the component mounts
     if (window.google && window.google.maps) {
+      console.log("Google Maps API already loaded");
       setIsGoogleMapsLoaded(true);
       return;
     }
     
     // If not, listen for the custom event
     const handleGoogleMapsLoaded = () => {
+      console.log("Google Maps API loaded event received");
       setIsGoogleMapsLoaded(true);
     };
     
@@ -58,6 +64,8 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   useEffect(() => {
     // Wait until Google Maps is loaded and map ref is available
     if (isGoogleMapsLoaded && mapRef.current && !map) {
+      console.log("Initializing map with Google Maps API");
+      
       // Initialize the map
       const initialPosition = {
         lat: initialLatitude || 0,
@@ -69,14 +77,16 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
+              console.log("Got current position:", position.coords);
               const currentPosition = {
                 lat: position.coords.latitude,
                 lng: position.coords.longitude
               };
               initializeMap(currentPosition);
             },
-            () => {
+            (error) => {
               // Fallback to a default position if geolocation is not available
+              console.error("Geolocation error:", error);
               initializeMap(initialPosition);
             }
           );
@@ -91,11 +101,12 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   
   const initializeMap = (position: google.maps.LatLngLiteral) => {
     if (!mapRef.current || !window.google || !window.google.maps) {
-      console.error("Google Maps API not loaded");
+      console.error("Google Maps API not loaded or map ref not available");
       return;
     }
     
     try {
+      console.log("Creating new Google Map with position:", position);
       const newMap = new window.google.maps.Map(mapRef.current, {
         center: position,
         zoom: 15,
@@ -114,12 +125,14 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       // Add click event to the map
       newMap.addListener('click', (event: any) => {
         if (event.latLng) {
+          console.log("Map clicked at:", event.latLng.lat(), event.latLng.lng());
           newMarker.setPosition(event.latLng);
           // Get address from coordinates
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode({ location: event.latLng }, (results, status) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
+              console.log("Geocoded address:", address);
               if (event.latLng) {
                 onLocationSelect(event.latLng.lat(), event.latLng.lng(), address);
               }
@@ -132,11 +145,13 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       newMarker.addListener('dragend', () => {
         const position = newMarker.getPosition();
         if (position) {
+          console.log("Marker dragged to:", position.lat(), position.lng());
           // Get address from coordinates
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode({ location: position }, (results, status) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
+              console.log("Geocoded address after drag:", address);
               onLocationSelect(position.lat(), position.lng(), address);
             }
           });
@@ -146,6 +161,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       setMap(newMap);
       setMarker(newMarker);
       setIsMapReady(true);
+      console.log("Map initialization complete");
     } catch (error) {
       console.error("Error initializing Google Maps:", error);
       toast({
