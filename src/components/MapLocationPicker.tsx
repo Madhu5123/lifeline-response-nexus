@@ -1,9 +1,13 @@
-/// <reference path="../types/google-maps.d.ts" />
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+// Explicitly define types for Google Maps to help TypeScript recognize them
+type GoogleMap = google.maps.Map;
+type GoogleMarker = google.maps.Marker;
+type LatLngLiteral = google.maps.LatLngLiteral;
 
 interface MapLocationPickerProps {
   onLocationSelect: (latitude: number, longitude: number, address: string) => void;
@@ -17,8 +21,8 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   initialLongitude
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [marker, setMarker] = useState<google.maps.Marker | null>(null);
+  const [map, setMap] = useState<GoogleMap | null>(null);
+  const [marker, setMarker] = useState<GoogleMarker | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
   const { toast } = useToast();
@@ -62,9 +66,9 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     if (isGoogleMapsLoaded && mapRef.current && !map) {
       console.log("Initializing map with Google Maps API");
       
-      const initialPosition = {
-        lat: initialLatitude || 0,
-        lng: initialLongitude || 0
+      const initialPosition: LatLngLiteral = {
+        lat: initialLatitude ?? 0,
+        lng: initialLongitude ?? 0
       };
       
       if (!initialLatitude || !initialLongitude) {
@@ -92,7 +96,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     }
   }, [initialLatitude, initialLongitude, map, isGoogleMapsLoaded]);
   
-  const initializeMap = (position: google.maps.LatLngLiteral) => {
+  const initializeMap = (position: LatLngLiteral) => {
     if (!mapRef.current || !window.google || !window.google.maps) {
       console.error("Google Maps API not loaded or map ref not available");
       return;
@@ -120,7 +124,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
           console.log("Map clicked at:", event.latLng.lat(), event.latLng.lng());
           newMarker.setPosition(event.latLng);
           const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: event.latLng }, (results, status) => {
+          geocoder.geocode({ location: event.latLng }, (results: any, status: string) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
               console.log("Geocoded address:", address);
@@ -137,7 +141,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         if (position) {
           console.log("Marker dragged to:", position.lat(), position.lng());
           const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: position }, (results, status) => {
+          geocoder.geocode({ location: position }, (results: any, status: string) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
               console.log("Geocoded address after drag:", address);
@@ -174,7 +178,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
           marker.setPosition(currentPosition);
           
           const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: currentPosition }, (results, status) => {
+          geocoder.geocode({ location: currentPosition }, (results: any, status: string) => {
             if (status === 'OK' && results?.[0]) {
               const address = results[0].formatted_address;
               onLocationSelect(currentPosition.lat, currentPosition.lng, address);

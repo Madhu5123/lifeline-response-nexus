@@ -9,10 +9,10 @@
     <!-- Google Maps API with callback -->
     <script>
       function initGoogleMapsAPI() {
-        // This function will be called when Google Maps API is loaded
         window.googleMapsLoaded = true;
         // Dispatch an event to notify components that Google Maps is ready
         window.dispatchEvent(new Event('google-maps-loaded'));
+        console.log("Google Maps API loaded and event dispatched");
       }
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCn9PtxnG4vnNEy_-azKJoWCz5nYVxF3IY&libraries=places&callback=initGoogleMapsAPI" async defer></script>
