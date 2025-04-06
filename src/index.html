@@ -1,24 +1,27 @@
 
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lifeline Response Nexus</title>
-  <!-- Google Maps API with callback -->
-  <script>
-    function initGoogleMapsAPI() {
-      // This function will be called when Google Maps API is loaded
-      window.googleMapsLoaded = true;
-      // Dispatch an event to notify components that Google Maps is ready
-      window.dispatchEvent(new Event('google-maps-loaded'));
-    }
-  </script>
-  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=places&callback=initGoogleMapsAPI" async defer></script>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lifeline AI</title>
+    <meta property="og:title" content="Lifeline AI" />
+    
+    <!-- Google Maps API with callback -->
+    <script>
+      function initGoogleMapsAPI() {
+        // This function will be called when Google Maps API is loaded
+        window.googleMapsLoaded = true;
+        // Dispatch an event to notify components that Google Maps is ready
+        window.dispatchEvent(new Event('google-maps-loaded'));
+      }
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=places&callback=initGoogleMapsAPI" async defer></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
