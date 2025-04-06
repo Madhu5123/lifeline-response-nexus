@@ -57,6 +57,19 @@ export function calculateETA(distance: number, avgSpeed: number = 50): number {
 }
 
 /**
+ * Calculate ETA from address (simplified, for demo purposes)
+ * @param address Text address
+ * @returns Estimated minutes (simplified calculation)
+ */
+export function calculateETAFromAddress(address: string): number {
+  // In a real application, you would use a geocoding service to get coordinates
+  // and then calculate actual distance and ETA
+  
+  // For demo purposes, we'll return a random value between 5-30 minutes
+  return Math.floor(Math.random() * (30 - 5 + 1)) + 5;
+}
+
+/**
  * Format ETA for display
  * @param minutes ETA in minutes
  * @returns Formatted ETA string
@@ -92,4 +105,13 @@ export function createGoogleMapsLink(lat: number, lng: number, label?: string): 
     return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodeURIComponent(label)}`;
   }
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+}
+
+/**
+ * Create a Google Maps link from an address string
+ * @param address The address to navigate to
+ * @returns Google Maps URL
+ */
+export function createGoogleMapsLinkFromAddress(address: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }

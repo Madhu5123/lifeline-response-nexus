@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useFirebaseDatabase } from "@/hooks/use-firebase-database";
-import MapLocationPicker from "@/components/MapLocationPicker";
 import { 
   ref,
   onValue,
@@ -50,12 +49,8 @@ const AmbulanceDashboard: React.FC = () => {
     symptoms: "",
     severity: "stable",
     description: "",
-    useCustomLocation: false,
-    customLocation: {
-      latitude: null as number | null,
-      longitude: null as number | null,
-      address: ""
-    }
+    address: "",
+    useCurrentLocation: true
   });
   
   const { toast } = useToast();
@@ -582,37 +577,33 @@ const AmbulanceDashboard: React.FC = () => {
   const handleLocationToggle = () => {
     setNewCase(prev => ({
       ...prev,
-      useCustomLocation: !prev.useCustomLocation
-    }));
-  };
-  
-  const handleLocationSelect = (latitude: number, longitude: number, address: string) => {
-    setNewCase(prev => ({
-      ...prev,
-      customLocation: {
-        latitude,
-        longitude,
-        address: address || "Selected Location"
-      }
+      useCurrentLocation: !prev.useCurrentLocation
     }));
   };
   
   const handleCreateCase = async () => {
     if (!user) return;
 
-    const needsLocation = !newCase.useCustomLocation && (!location.latitude || !location.longitude);
+    if (!newCase.useCurrentLocation && !newCase.address) {
+      toast({
+        title: "Address required",
+        description: "Please enter an address or enable current location.",
+        variant: "destructive",
+      });
+      return;
+    }
     
-    if (needsLocation) {
+    if (newCase.useCurrentLocation && (!location.latitude || !location.longitude)) {
       toast({
         title: "Location required",
-        description: "Your location is needed to create a case. Please enable location services or select a location on the map.",
+        description: "Your location is needed to create a case. Please enable location services or enter an address manually.",
         variant: "destructive",
       });
       return;
     }
     
     try {
-      const { patientName, age, gender, symptoms, severity, description, useCustomLocation, customLocation } = newCase;
+      const { patientName, age, gender, symptoms, severity, description, address, useCurrentLocation } = newCase;
       
       if (!patientName || !age || !symptoms || !description) {
         toast({
@@ -626,16 +617,16 @@ const AmbulanceDashboard: React.FC = () => {
       const casesRef = ref(db, "emergencyCases");
       const newCaseRef = push(casesRef);
       
-      const locationData = useCustomLocation && customLocation.latitude && customLocation.longitude
+      const locationData = useCurrentLocation
         ? {
-            latitude: customLocation.latitude,
-            longitude: customLocation.longitude,
-            address: customLocation.address || "Selected Location"
-          }
-        : {
             latitude: location.latitude!,
             longitude: location.longitude!,
             address: "Current Location"
+          }
+        : {
+            address: address,
+            latitude: 0,
+            longitude: 0
           };
       
       const caseData = {
@@ -679,12 +670,8 @@ const AmbulanceDashboard: React.FC = () => {
         symptoms: "",
         severity: "stable",
         description: "",
-        useCustomLocation: false,
-        customLocation: {
-          latitude: null,
-          longitude: null,
-          address: ""
-        }
+        address: "",
+        useCurrentLocation: true
       });
     } catch (error) {
       console.error("Error creating case:", error);
@@ -845,33 +832,41 @@ const AmbulanceDashboard: React.FC = () => {
                   />
                 </div>
                 
-                {/* Location Selection */}
                 <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 mb-3">
                     <Checkbox 
-                      id="useCustomLocation" 
-                      checked={newCase.useCustomLocation} 
+                      id="useCurrentLocation" 
+                      checked={newCase.useCurrentLocation} 
                       onCheckedChange={handleLocationToggle}
                     />
-                    <Label htmlFor="useCustomLocation">Select a custom location on the map</Label>
+                    <Label htmlFor="useCurrentLocation">Use my current location</Label>
                   </div>
                   
-                  {newCase.useCustomLocation && (
-                    <MapLocationPicker 
-                      onLocationSelect={handleLocationSelect}
-                      initialLatitude={location.latitude}
-                      initialLongitude={location.longitude}
-                    />
+                  {!newCase.useCurrentLocation && (
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address</Label>
+                      <Input
+                        id="address"
+                        name="address"
+                        value={newCase.address}
+                        onChange={handleInputChange}
+                        placeholder="Enter full address"
+                      />
+                      <p className="text-xs text-gray-500">
+                        Please provide a complete address for accurate ETA calculations
+                      </p>
+                    </div>
                   )}
                   
-                  {newCase.useCustomLocation && newCase.customLocation.latitude && (
-                    <div className="mt-2 text-sm text-blue-600">
-                      Selected location: {newCase.customLocation.address}
+                  {newCase.useCurrentLocation && (
+                    <div className="text-sm text-blue-600 flex items-center">
+                      <MapPin className="h-4 w-4 mr-1" />
+                      Using your current location
                     </div>
                   )}
                 </div>
                 
-                {nearbyHospitals.length > 0 && (
+                {nearbyHospitals.length > 0 && newCase.useCurrentLocation && (
                   <div className="space-y-2">
                     <Label>Nearby Hospitals ({nearbyHospitals.length})</Label>
                     <div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded text-sm">
