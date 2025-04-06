@@ -1,4 +1,5 @@
 
+// This declaration file makes the Google Maps JavaScript API available to TypeScript
 declare global {
   interface Window {
     google: typeof google;
