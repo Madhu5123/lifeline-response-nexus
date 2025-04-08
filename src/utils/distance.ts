@@ -57,16 +57,89 @@ export function calculateETA(distance: number, avgSpeed: number = 50): number {
 }
 
 /**
- * Calculate ETA from address (simplified, for demo purposes)
- * @param address Text address
- * @returns Estimated minutes (simplified calculation)
+ * Geocode an address string to get latitude and longitude
+ * @param address The address to geocode
+ * @returns Promise resolving to latitude and longitude
  */
-export function calculateETAFromAddress(address: string): number {
-  // In a real application, you would use a geocoding service to get coordinates
-  // and then calculate actual distance and ETA
-  
-  // For demo purposes, we'll return a random value between 5-30 minutes
-  return Math.floor(Math.random() * (30 - 5 + 1)) + 5;
+export function geocodeAddress(address: string): Promise<{lat: number, lng: number}> {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !window.google.maps) {
+      reject(new Error("Google Maps API not loaded"));
+      return;
+    }
+    
+    const geocoder = new window.google.maps.Geocoder();
+    
+    geocoder.geocode({ address }, (results, status) => {
+      if (status === "OK" && results && results[0]) {
+        const location = results[0].geometry.location;
+        resolve({
+          lat: location.lat(),
+          lng: location.lng()
+        });
+      } else {
+        reject(new Error(`Geocoding failed: ${status}`));
+      }
+    });
+  });
+}
+
+/**
+ * Calculate ETA from address (using geocoding)
+ * @param address Text address
+ * @param destLat Destination latitude
+ * @param destLng Destination longitude
+ * @returns Promise resolving to estimated minutes
+ */
+export async function calculateETAFromAddress(
+  address: string, 
+  destLat?: number, 
+  destLng?: number
+): Promise<number> {
+  try {
+    if (!address) {
+      return Math.floor(Math.random() * (30 - 5 + 1)) + 5; // Fallback to random ETA
+    }
+    
+    const coords = await geocodeAddress(address);
+    
+    if (destLat && destLng) {
+      const distance = calculateDistance(coords.lat, coords.lng, destLat, destLng);
+      return calculateETA(distance);
+    }
+    
+    // Fallback if destination coordinates not provided
+    return Math.floor(Math.random() * (30 - 5 + 1)) + 5;
+  } catch (error) {
+    console.error("Error calculating ETA from address:", error);
+    return Math.floor(Math.random() * (30 - 5 + 1)) + 5; // Fallback to random ETA
+  }
+}
+
+/**
+ * Get address from coordinates (reverse geocoding)
+ * @param lat Latitude
+ * @param lng Longitude
+ * @returns Promise resolving to address string
+ */
+export function getAddressFromCoordinates(lat: number, lng: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !window.google.maps) {
+      reject(new Error("Google Maps API not loaded"));
+      return;
+    }
+    
+    const geocoder = new window.google.maps.Geocoder();
+    const location = { lat, lng };
+    
+    geocoder.geocode({ location }, (results, status) => {
+      if (status === "OK" && results && results[0]) {
+        resolve(results[0].formatted_address);
+      } else {
+        reject(new Error(`Reverse geocoding failed: ${status}`));
+      }
+    });
+  });
 }
 
 /**
@@ -114,4 +187,39 @@ export function createGoogleMapsLink(lat: number, lng: number, label?: string): 
  */
 export function createGoogleMapsLinkFromAddress(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+}
+
+/**
+ * Checks if Google Maps API is loaded
+ * @returns Boolean indicating if Google Maps API is available
+ */
+export function isGoogleMapsLoaded(): boolean {
+  return !!(window.google && window.google.maps);
+}
+
+/**
+ * Waits for Google Maps API to load
+ * @param timeout Optional timeout in milliseconds
+ * @returns Promise that resolves when API is loaded
+ */
+export function waitForGoogleMapsToLoad(timeout: number = 10000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.googleMapsLoaded || (window.google && window.google.maps)) {
+      resolve();
+      return;
+    }
+    
+    const timeoutId = setTimeout(() => {
+      window.removeEventListener('google-maps-loaded', handleLoaded);
+      reject(new Error('Google Maps API failed to load'));
+    }, timeout);
+    
+    const handleLoaded = () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('google-maps-loaded', handleLoaded);
+      resolve();
+    };
+    
+    window.addEventListener('google-maps-loaded', handleLoaded);
+  });
 }

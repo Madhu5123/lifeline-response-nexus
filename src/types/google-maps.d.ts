@@ -67,6 +67,14 @@ declare namespace google {
       region?: string;
     }
 
+    interface GeocoderComponentRestrictions {
+      administrativeArea?: string;
+      country?: string | string[];
+      locality?: string;
+      postalCode?: string;
+      route?: string;
+    }
+
     interface GeocoderResult {
       address_components: GeocoderAddressComponent[];
       formatted_address: string;
