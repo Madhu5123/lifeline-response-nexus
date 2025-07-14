@@ -398,25 +398,7 @@ const PoliceDashboard: React.FC = () => {
           </TabsContent>
         </Tabs>
         
-        <Card>
-          <CardHeader className="bg-yellow-50 text-yellow-800 border-b border-yellow-200">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 mt-0.5" />
-              <CardTitle className="text-yellow-800">Important Notice</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <p>
-              This is a demo version of the Lifeline Emergency Response app. In a real implementation, this would include:
-            </p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Live GPS tracking of all ambulances in the city</li>
-              <li>Automatic proximity alerts when ambulances are nearby</li>
-              <li>Traffic management suggestions for ambulance routes</li>
-              <li>Communication channels with ambulance drivers</li>
-            </ul>
-          </CardContent>
-        </Card>
+       
       </div>
     </DashboardLayout>
   );

@@ -1,4 +1,4 @@
-package com.lifelineai.app;
+package com.example.lifelineai;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, Clock, X, MapPin, Phone, AlertCircle, Calendar, Clipboard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
+import axios from "axios";
 import { 
   ref,
   get,
@@ -24,7 +25,7 @@ import {
 } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { EmergencyCase } from "@/models/types";
-import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
+// import { calculateDistance, calculateETA, formatETA } from "@/utils/distance";
 
 const HospitalDashboard: React.FC = () => {
   const [pendingCases, setPendingCases] = useState<EmergencyCase[]>([]);
@@ -164,47 +165,47 @@ const HospitalDashboard: React.FC = () => {
         }));
         
         // Update ETA for related cases
-        updateETAForAmbulance(ambulanceId, locationData);
+        // updateETAForAmbulance(ambulanceId, locationData);
       }
     });
   };
   
   // Update ETA based on new ambulance location
-  const updateETAForAmbulance = (ambulanceId: string, locationData: any) => {
-    activeCases.forEach(async (activeCase) => {
-      if (activeCase.ambulanceId === ambulanceId && 
-          activeCase.status === "en-route" &&
-          user?.details?.location?.latitude && 
-          user?.details?.location?.longitude) {
+  // const updateETAForAmbulance = (ambulanceId: string, locationData: any) => {
+  //   activeCases.forEach(async (activeCase) => {
+  //     if (activeCase.ambulanceId === ambulanceId && 
+  //         activeCase.status === "en-route" &&
+  //         user?.details?.location?.latitude && 
+  //         user?.details?.location?.longitude) {
         
-        // Calculate distance between ambulance and hospital
-        const distance = calculateDistance(
-          locationData.latitude,
-          locationData.longitude,
-          user.details.location.latitude,
-          user.details.location.longitude
-        );
+  //       // Calculate distance between ambulance and hospital
+  //       const etadistance = calculateDistance(
+  //         locationData.latitude,
+  //         locationData.longitude,
+  //         user.details.location.latitude,
+  //         user.details.location.longitude
+  //       );
         
-        // Calculate new ETA
-        const eta = formatETA(calculateETA(distance));
+  //       // Calculate new ETA
+  //       const eta = formatETA(calculateETA(etadistance));
         
-        // Update case with new ETA
-        const caseRef = ref(db, `emergencyCases/${activeCase.id}`);
+  //       // Update case with new ETA
+  //       const caseRef = ref(db, `emergencyCases/${activeCase.id}`);
         
-        try {
-          await update(caseRef, {
-            ambulanceInfo: {
-              ...activeCase.ambulanceInfo,
-              estimatedArrival: eta,
-              lastLocationUpdate: locationData.lastUpdated
-            }
-          });
-        } catch (error) {
-          console.error("Error updating ETA:", error);
-        }
-      }
-    });
-  };
+  //       try {
+  //         await update(caseRef, {
+  //           ambulanceInfo: {
+  //             ...activeCase.ambulanceInfo,
+  //             estimatedArrival: eta,
+  //             lastLocationUpdate: locationData.lastUpdated
+  //           }
+  //         });
+  //       } catch (error) {
+  //         console.error("Error updating ETA:", error);
+  //       }
+  //     }
+  //   });
+  // };
   
   // Fetch completed cases history
   useEffect(() => {
@@ -255,50 +256,113 @@ const HospitalDashboard: React.FC = () => {
     fetchHistoryCases();
   }, [user, toast]);
   
-  // Accept a case
-  const handleAcceptCase = async (caseId: string) => {
-    if (!user) return;
-    
-    try {
-      const hospitalData = {
-        id: user.id,
-        name: user.details?.organization || "Hospital",
-        address: user.details?.address || "Hospital Address",
-        contact: user.details?.phone || "Contact Number",
-        distance: "Calculating...",
-        beds: stats.availableBeds,
-        location: user.details?.location || {
-          latitude: 0,
-          longitude: 0
-        }
+const getLatLongFromAddress = async (address: string) => {
+  const apiKey = "AIzaSyCn9PtxnG4vnNEy_-azKJoWCz5nYVxF3IY";
+  const encodedAddress = encodeURIComponent(address);
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
+
+  try {
+    const response = await axios.get(url);
+    const results = response.data.results;
+
+    if (results.length > 0) {
+      const location = results[0].geometry.location;
+      return {
+        latitude: location.lat,
+        longitude: location.lng
       };
-      
-      const caseRef = ref(db, `emergencyCases/${caseId}`);
-      await update(caseRef, {
-        status: "accepted",
-        hospitalId: user.id,
-        hospital: hospitalData,
-        updatedAt: new Date().toISOString(),
-      });
-      
-      setStats(prev => ({
-        ...prev,
-        availableBeds: prev.availableBeds - 1
-      }));
-      
-      toast({
-        title: "Case Accepted",
-        description: `You have accepted the emergency case. The ambulance has been notified.`,
-      });
-    } catch (error) {
-      console.error("Error accepting case:", error);
-      toast({
-        title: "Error",
-        description: "Failed to accept the case",
-        variant: "destructive",
-      });
     }
+  } catch (error) {
+    console.error("Geocoding error:", error);
+  }
+
+  return {
+    latitude: 0,
+    longitude: 0
   };
+};
+
+const handleAcceptCase = async (caseId: string) => {
+  if (!user) return;
+
+  try {
+    const address = user.details?.address || "Hospital Address";
+    const location = user.details?.location || await getLatLongFromAddress(address);
+
+    // Fetch the emergency case location
+    const caseRef = ref(db, `emergencyCases/${caseId}`);
+    const caseSnapshot = await get(caseRef);
+    const caseData = caseSnapshot.val();
+
+    const caseLocation = caseData?.location || { latitude: 0, longitude: 0 };
+
+    // Calculate distance
+    const distance = calculateDistance(
+      location.latitude,
+      location.longitude,
+      caseLocation.latitude,
+      caseLocation.longitude
+    );
+
+    const hospitalData = {
+      id: user.id,
+      name: user.details?.organization || "Hospital",
+      address,
+      contact: user.details?.phone || "Contact Number",
+      distance,
+      beds: stats.availableBeds,
+      location
+    };
+
+    await update(caseRef, {
+      status: "accepted",
+      hospitalId: user.id,
+      hospital: hospitalData,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setStats(prev => ({
+      ...prev,
+      availableBeds: prev.availableBeds - 1
+    }));
+
+    toast({
+      title: "Case Accepted",
+      description: `You have accepted the emergency case. The ambulance has been notified.`,
+    });
+  } catch (error) {
+    console.error("Error accepting case:", error);
+    toast({
+      title: "Error",
+      description: "Failed to accept the case",
+      variant: "destructive",
+    });
+  }
+};
+
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): string => {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+
+  const R = 6371; // Radius of Earth in kilometers
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distanceKm = R * c;
+
+  return `${distanceKm.toFixed(2)} km`;
+};
+
   
   // Reject a case
   const handleRejectCase = async (caseId: string) => {
@@ -627,7 +691,7 @@ const HospitalDashboard: React.FC = () => {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
                               <p className="text-xs text-blue-700 dark:text-blue-400">Driver</p>
-                              <p className="text-sm font-medium">{emergency.ambulanceInfo.driverName}</p>
+                              <p className="text-sm font-medium">{emergency.ambulanceInfo.driver}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 p-3 rounded-lg">
                               <p className="text-xs text-blue-700 dark:text-blue-400">Vehicle</p>

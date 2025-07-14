@@ -66,15 +66,55 @@ const AmbulanceDashboard: React.FC = () => {
     
     try {
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
-      update(ambulanceRef, {
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          lastUpdated: new Date().toISOString(),
-          address: "Current Location"
-        },
-        lastUpdated: new Date().toISOString()
-      });
+      const fetchAndUpdateAddress = async () => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}`,
+            {
+              headers: {
+                "Accept-Language": "en",
+                "User-Agent": "ambulance-app/1.0 (lifelineasai@gmail.com)"
+              },
+            }
+          );
+          const data = await res.json();
+          const resolvedAddress = data.display_name || "Unknown Location";
+      
+          update(ambulanceRef, {
+            location: {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              lastUpdated: new Date().toISOString(),
+              address: resolvedAddress
+            },
+            lastUpdated: new Date().toISOString()
+          });
+        } catch (error) {
+          console.error("Reverse geocoding failed:", error);
+      
+          // Fallback without address
+          update(ambulanceRef, {
+            location: {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              lastUpdated: new Date().toISOString(),
+              address: "Unknown"
+            },
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      };
+      
+      fetchAndUpdateAddress();      
+      // update(ambulanceRef, {
+      //   location: {
+      //     latitude: location.latitude,
+      //     longitude: location.longitude,
+      //     lastUpdated: new Date().toISOString(),
+      //     address: "Current Location"
+      //   },
+      //   lastUpdated: new Date().toISOString()
+      // });
     } catch (error) {
       console.error("Error updating ambulance location:", error);
     }
@@ -139,7 +179,7 @@ const AmbulanceDashboard: React.FC = () => {
         const pendingQuery = query(
           casesRef, 
           orderByChild("status"), 
-          equalTo("pending")
+          equalTo("Not Approved")
         );
         
         const unsubscribe = onValue(pendingQuery, (snapshot) => {
@@ -617,18 +657,12 @@ const AmbulanceDashboard: React.FC = () => {
       const casesRef = ref(db, "emergencyCases");
       const newCaseRef = push(casesRef);
       
+
       const locationData = useCurrentLocation
-        ? {
-            latitude: location.latitude!,
-            longitude: location.longitude!,
-            address: "Current Location"
-          }
-        : {
-            address: address,
-            latitude: 0,
-            longitude: 0
-          };
-      
+      ? await fetchAndResolveAddress(location.latitude!, location.longitude!)
+      : { address: address, latitude: 0, longitude: 0 };
+
+
       const caseData = {
         patientName,
         age: parseInt(age),
@@ -638,19 +672,19 @@ const AmbulanceDashboard: React.FC = () => {
         description,
         type: "medical",
         priority: severity === "critical" ? "critical" : severity === "serious" ? "high" : "medium",
-        status: "pending" as CaseStatus,
+        status: "Not Approved" as CaseStatus,
         location: locationData,
         reportedBy: {
           id: user.id,
           name: user.name,
           role: "ambulance"
         },
-        ambulanceId: user.id,
-        ambulanceInfo: {
-          id: user.id,
-          driver: user.name,
-          vehicleNumber: user.details?.vehicleNumber || "Unknown"
-        },
+        // ambulanceId: user.id,
+        // ambulanceInfo: {
+        //   id: user.id,
+        //   driver: user.name,
+        //   vehicleNumber: user.details?.vehicleNumber || "Unknown"
+        // },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -680,6 +714,36 @@ const AmbulanceDashboard: React.FC = () => {
         description: "Failed to create emergency case",
         variant: "destructive",
       });
+    }
+  };
+
+  const fetchAndResolveAddress = async (latitude: number, longitude: number) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+        {
+          headers: {
+            "Accept-Language": "en",
+            "User-Agent": "ambulance-app/1.0 (lifelineasai@gmail.com)",
+          },
+        }
+      );
+  
+      const data = await res.json();
+      const resolvedAddress = data.display_name || "Unknown Location";
+  
+      return {
+        latitude,
+        longitude,
+        address: resolvedAddress,
+      };
+    } catch (error) {
+      console.error("Failed to resolve address:", error);
+      return {
+        latitude,
+        longitude,
+        address: "Unknown",
+      };
     }
   };
   
