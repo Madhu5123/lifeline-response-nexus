@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, MapPin, Phone, Calendar, Plus, Navigation } from "lucide-react";
+import { Check, MapPin, Phone, Calendar, Plus, Navigation, RefreshCw, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const AmbulanceDashboard: React.FC = () => {
   const [cases, setCases] = useState<EmergencyCase[]>([]);
@@ -55,14 +56,95 @@ const AmbulanceDashboard: React.FC = () => {
   
   const { toast } = useToast();
   const { user } = useAuth();
-  const location = useGeolocation({ enableHighAccuracy: true }, 10000);
+  const location = useGeolocation({ 
+    enableHighAccuracy: true, 
+    timeout: 30000, 
+    maximumAge: 300000 
+  }, 10000);
   
   const { updateLocation, startLocationTracking: dbStartLocationTracking } = useFirebaseDatabase({
     path: 'ambulances'
   });
 
+  // Check if location is available
+  const isLocationAvailable = () => {
+    return location.latitude !== null && 
+           location.longitude !== null && 
+           !location.loading && 
+           !location.error &&
+           !location.permissionDenied;
+  };
+
+  // Location status component
+  const LocationStatus = () => {
+    if (location.loading) {
+      return (
+        <Alert className="mb-4">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          <AlertDescription>Getting your location...</AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (location.permissionDenied) {
+      return (
+        <Alert className="mb-4 border-red-200 bg-red-50">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            Location access denied. Please enable location services in your browser settings and refresh the page.
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => location.retryLocation()}
+              className="ml-2"
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (location.error) {
+      return (
+        <Alert className="mb-4 border-yellow-200 bg-yellow-50">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            {location.error}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => location.retryLocation()}
+              className="ml-2"
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (isLocationAvailable()) {
+      return (
+        <Alert className="mb-4 border-green-200 bg-green-50">
+          <MapPin className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            Location services enabled. Ready to accept cases.
+            {location.accuracy && (
+              <span className="ml-2 text-sm">
+                (Accuracy: {Math.round(location.accuracy)}m)
+              </span>
+            )}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return null;
+  };
+  
   useEffect(() => {
-    if (!user || !location.latitude || !location.longitude) return;
+    if (!user || !isLocationAvailable()) return;
     
     try {
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
@@ -121,7 +203,7 @@ const AmbulanceDashboard: React.FC = () => {
   }, [location.latitude, location.longitude, user]);
   
   useEffect(() => {
-    if (!location.latitude || !location.longitude) return;
+    if (!isLocationAvailable()) return;
     
     const fetchHospitals = async () => {
       try {
@@ -306,10 +388,19 @@ const AmbulanceDashboard: React.FC = () => {
   }, []);
   
   const handleAcceptCase = async (emergencyCase: EmergencyCase) => {
-    if (!user || !location.latitude || !location.longitude) {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to accept cases.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isLocationAvailable()) {
       toast({
         title: "Location required",
-        description: "Your location is needed to accept a case. Please enable location services.",
+        description: "Your location is needed to accept a case. Please enable location services and ensure GPS is working.",
         variant: "destructive",
       });
       return;
@@ -323,8 +414,8 @@ const AmbulanceDashboard: React.FC = () => {
       
       if (emergencyCase.location?.latitude && emergencyCase.location?.longitude) {
         distanceKm = calculateDistance(
-          location.latitude,
-          location.longitude,
+          location.latitude!,
+          location.longitude!,
           emergencyCase.location.latitude,
           emergencyCase.location.longitude
         );
@@ -400,12 +491,12 @@ const AmbulanceDashboard: React.FC = () => {
     stopLocationTracking();
     
     const getCurrentLocation = async () => {
-      if (!location.latitude || !location.longitude) {
+      if (!isLocationAvailable()) {
         throw new Error("Location not available");
       }
       return {
-        latitude: location.latitude,
-        longitude: location.longitude
+        latitude: location.latitude!,
+        longitude: location.longitude!
       };
     };
     
@@ -633,7 +724,7 @@ const AmbulanceDashboard: React.FC = () => {
       return;
     }
     
-    if (newCase.useCurrentLocation && (!location.latitude || !location.longitude)) {
+    if (newCase.useCurrentLocation && !isLocationAvailable()) {
       toast({
         title: "Location required",
         description: "Your location is needed to create a case. Please enable location services or enter an address manually.",
@@ -679,12 +770,6 @@ const AmbulanceDashboard: React.FC = () => {
           name: user.name,
           role: "ambulance"
         },
-        // ambulanceId: user.id,
-        // ambulanceInfo: {
-        //   id: user.id,
-        //   driver: user.name,
-        //   vehicleNumber: user.details?.vehicleNumber || "Unknown"
-        // },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -775,10 +860,10 @@ const AmbulanceDashboard: React.FC = () => {
   
   const casesWithDistance = cases.map(emergencyCase => {
     let distance = 0;
-    if (location.latitude && location.longitude && emergencyCase.location?.latitude && emergencyCase.location?.longitude) {
+    if (isLocationAvailable() && emergencyCase.location?.latitude && emergencyCase.location?.longitude) {
       distance = calculateDistance(
-        location.latitude,
-        location.longitude,
+        location.latitude!,
+        location.longitude!,
         emergencyCase.location.latitude,
         emergencyCase.location.longitude
       );
@@ -793,6 +878,8 @@ const AmbulanceDashboard: React.FC = () => {
   return (
     <DashboardLayout title="Ambulance Dashboard" role="ambulance">
       <div className="space-y-6">
+        <LocationStatus />
+        
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Ambulance Control Panel</h1>
           
@@ -925,12 +1012,12 @@ const AmbulanceDashboard: React.FC = () => {
                   {newCase.useCurrentLocation && (
                     <div className="text-sm text-blue-600 flex items-center">
                       <MapPin className="h-4 w-4 mr-1" />
-                      Using your current location
+                      {isLocationAvailable() ? "Using your current location" : "Waiting for location..."}
                     </div>
                   )}
                 </div>
                 
-                {nearbyHospitals.length > 0 && newCase.useCurrentLocation && (
+                {nearbyHospitals.length > 0 && newCase.useCurrentLocation && isLocationAvailable() && (
                   <div className="space-y-2">
                     <Label>Nearby Hospitals ({nearbyHospitals.length})</Label>
                     <div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded text-sm">
@@ -1047,7 +1134,12 @@ const AmbulanceDashboard: React.FC = () => {
                     </div>
                   </CardContent>
                   <CardFooter className="justify-end">
-                    <Button onClick={() => handleAcceptCase(emergencyCase)}>Accept Case</Button>
+                    <Button 
+                      onClick={() => handleAcceptCase(emergencyCase)}
+                      disabled={!isLocationAvailable()}
+                    >
+                      {!isLocationAvailable() ? "Location Required" : "Accept Case"}
+                    </Button>
                   </CardFooter>
                 </Card>
               ))
