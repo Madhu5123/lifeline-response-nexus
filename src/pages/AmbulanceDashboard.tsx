@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, MapPin, Phone, Calendar, Plus, Navigation, RefreshCw, AlertTriangle } from "lucide-react";
+import { Check, MapPin, Phone, Calendar, Plus, Navigation, RefreshCw, AlertTriangle, Route } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import RouteOptimizer from "@/components/RouteOptimizer";
 
 const AmbulanceDashboard: React.FC = () => {
   const [cases, setCases] = useState<EmergencyCase[]>([]);
@@ -42,6 +43,7 @@ const AmbulanceDashboard: React.FC = () => {
   const [nearbyHospitals, setNearbyHospitals] = useState<HospitalWithLocation[]>([]);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
   const locationTrackingRef = useRef<(() => void) | null>(null);
+  const [showRouteOptimizer, setShowRouteOptimizer] = useState<string | null>(null);
   
   const [newCase, setNewCase] = useState({
     patientName: "",
@@ -483,6 +485,20 @@ const AmbulanceDashboard: React.FC = () => {
     }
     
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`, '_blank');
+  };
+
+  const handleRouteOptimization = (caseId: string) => {
+    setShowRouteOptimizer(showRouteOptimizer === caseId ? null : caseId);
+  };
+
+  const handleRouteSelected = (route: any) => {
+    toast({
+      title: "Route Selected",
+      description: `Optimized route selected: ${route.durationInTraffic} with ${route.trafficDelay}`,
+    });
+    
+    // Open the selected route in Google Maps
+    window.open(route.googleMapsUrl, '_blank');
   };
   
   const startLocationTracking = () => {
@@ -1204,52 +1220,75 @@ const AmbulanceDashboard: React.FC = () => {
                           </div>
                         </div>
                         
-                        <div className="flex justify-end gap-2 mt-4">
-                          {emergencyCase.status === "accepted" && (
+                        <div className="space-y-4">
+                          <div className="flex justify-end gap-2">
                             <Button 
-                              onClick={() => handleStartRoute(emergencyCase)}
-                              className="bg-blue-600 hover:bg-blue-700"
+                              onClick={() => handleRouteOptimization(emergencyCase.id)}
+                              variant="outline"
+                              className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
                             >
-                              <Navigation className="mr-2 h-4 w-4" />
-                              Start Route
+                              <Route className="mr-2 h-4 w-4" />
+                              {showRouteOptimizer === emergencyCase.id ? "Hide" : "Optimize Route"}
                             </Button>
-                          )}
-                          
-                          {emergencyCase.status === "en-route" && (
+
+                            {emergencyCase.status === "accepted" && (
+                              <Button 
+                                onClick={() => handleStartRoute(emergencyCase)}
+                                className="bg-blue-600 hover:bg-blue-700"
+                              >
+                                <Navigation className="mr-2 h-4 w-4" />
+                                Start Route
+                              </Button>
+                            )}
+                            
+                            {emergencyCase.status === "en-route" && (
+                              <Button 
+                                onClick={() => handleMarkArrived(emergencyCase)}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <Check className="mr-2 h-4 w-4" />
+                                Mark as Arrived
+                              </Button>
+                            )}
+                            
+                            {emergencyCase.status === "arrived" && (
+                              <Button 
+                                onClick={() => handleCompleteCase(emergencyCase)}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <Check className="mr-2 h-4 w-4" />
+                                Complete Case
+                              </Button>
+                            )}
+                            
                             <Button 
-                              onClick={() => handleMarkArrived(emergencyCase)}
-                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => openGoogleMaps(emergencyCase)}
+                              variant="outline"
                             >
-                              <Check className="mr-2 h-4 w-4" />
-                              Mark as Arrived
+                              <MapPin className="mr-2 h-4 w-4" />
+                              View on Map
                             </Button>
-                          )}
-                          
-                          {emergencyCase.status === "arrived" && (
+                            
                             <Button 
-                              onClick={() => handleCompleteCase(emergencyCase)}
-                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => handleCancelCase(emergencyCase)}
+                              variant="outline"
+                              className="text-red-500 hover:bg-red-50"
                             >
-                              <Check className="mr-2 h-4 w-4" />
-                              Complete Case
+                              Cancel
                             </Button>
+                          </div>
+
+                          {showRouteOptimizer === emergencyCase.id && isLocationAvailable() && (
+                            <RouteOptimizer
+                              emergencyCase={emergencyCase}
+                              currentLocation={{
+                                latitude: location.latitude!,
+                                longitude: location.longitude!
+                              }}
+                              onRouteSelected={handleRouteSelected}
+                              className="mt-4 p-4 bg-gray-50 rounded-lg border"
+                            />
                           )}
-                          
-                          <Button 
-                            onClick={() => openGoogleMaps(emergencyCase)}
-                            variant="outline"
-                          >
-                            <MapPin className="mr-2 h-4 w-4" />
-                            View on Map
-                          </Button>
-                          
-                          <Button 
-                            onClick={() => handleCancelCase(emergencyCase)}
-                            variant="outline"
-                            className="text-red-500 hover:bg-red-50"
-                          >
-                            Cancel
-                          </Button>
                         </div>
                       </>
                     )}

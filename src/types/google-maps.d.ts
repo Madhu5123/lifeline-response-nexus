@@ -34,6 +34,95 @@ declare namespace google {
       ): void;
     }
 
+    class DirectionsService {
+      route(
+        request: DirectionsRequest,
+        callback: (
+          result: DirectionsResult | null,
+          status: DirectionsStatus
+        ) => void
+      ): void;
+    }
+
+    interface DirectionsRequest {
+      origin: LatLng | LatLngLiteral | string;
+      destination: LatLng | LatLngLiteral | string;
+      travelMode: TravelMode;
+      waypoints?: DirectionsWaypoint[];
+      optimizeWaypoints?: boolean;
+      provideRouteAlternatives?: boolean;
+      avoidHighways?: boolean;
+      avoidTolls?: boolean;
+      avoidFerries?: boolean;
+      drivingOptions?: DrivingOptions;
+      unitSystem?: UnitSystem;
+      region?: string;
+    }
+
+    interface DirectionsResult {
+      routes: DirectionsRoute[];
+      geocoded_waypoints?: DirectionsGeocodedWaypoint[];
+    }
+
+    interface DirectionsRoute {
+      bounds: LatLngBounds;
+      copyrights: string;
+      legs: DirectionsLeg[];
+      overview_path: LatLng[];
+      overview_polyline: string;
+      summary: string;
+      warnings: string[];
+      waypoint_order: number[];
+    }
+
+    interface DirectionsLeg {
+      distance?: Distance;
+      duration?: Duration;
+      duration_in_traffic?: Duration;
+      end_address: string;
+      end_location: LatLng;
+      start_address: string;
+      start_location: LatLng;
+      steps: DirectionsStep[];
+      via_waypoints: LatLng[];
+    }
+
+    interface DirectionsStep {
+      distance: Distance;
+      duration: Duration;
+      end_location: LatLng;
+      instructions: string;
+      path: LatLng[];
+      start_location: LatLng;
+      travel_mode: TravelMode;
+    }
+
+    interface DirectionsWaypoint {
+      location: LatLng | LatLngLiteral | string;
+      stopover?: boolean;
+    }
+
+    interface DirectionsGeocodedWaypoint {
+      geocoder_status: GeocoderStatus;
+      place_id: string;
+      types: string[];
+    }
+
+    interface DrivingOptions {
+      departureTime: Date;
+      trafficModel?: TrafficModel;
+    }
+
+    interface Distance {
+      text: string;
+      value: number;
+    }
+
+    interface Duration {
+      text: string;
+      value: number;
+    }
+
     // Add MapMouseEvent interface
     interface MapMouseEvent {
       latLng?: LatLng;
@@ -170,6 +259,35 @@ declare namespace google {
       DROP = 2,
       uu = 3,
       vv = 4,
+    }
+
+    enum TravelMode {
+      BICYCLING = 'BICYCLING',
+      DRIVING = 'DRIVING',
+      TRANSIT = 'TRANSIT',
+      WALKING = 'WALKING',
+    }
+
+    enum TrafficModel {
+      BEST_GUESS = 'bestguess',
+      OPTIMISTIC = 'optimistic',
+      PESSIMISTIC = 'pessimistic',
+    }
+
+    enum DirectionsStatus {
+      INVALID_REQUEST = 'INVALID_REQUEST',
+      MAX_WAYPOINTS_EXCEEDED = 'MAX_WAYPOINTS_EXCEEDED',
+      NOT_FOUND = 'NOT_FOUND',
+      OK = 'OK',
+      OVER_QUERY_LIMIT = 'OVER_QUERY_LIMIT',
+      REQUEST_DENIED = 'REQUEST_DENIED',
+      UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+      ZERO_RESULTS = 'ZERO_RESULTS',
+    }
+
+    enum UnitSystem {
+      IMPERIAL = 1,
+      METRIC = 0,
     }
 
     class NavigationControl {
