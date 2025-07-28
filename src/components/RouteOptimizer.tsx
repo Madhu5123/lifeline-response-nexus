@@ -87,7 +87,14 @@ const RouteOptimizer: React.FC<RouteOptimizerProps> = ({
           if (status === 'OK' && result) {
             resolve(result);
           } else {
-            reject(new Error(`Directions request failed: ${status}`));
+            console.error('Directions API error:', status);
+            if (status === 'REQUEST_DENIED') {
+              reject(new Error('Directions API access denied. Please enable Directions API for your Google Maps API key.'));
+            } else if (status === 'OVER_QUERY_LIMIT') {
+              reject(new Error('Google Maps API quota exceeded. Please check your usage limits.'));
+            } else {
+              reject(new Error(`Directions request failed: ${status}`));
+            }
           }
         });
       });
