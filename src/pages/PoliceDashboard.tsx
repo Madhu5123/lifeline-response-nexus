@@ -14,53 +14,19 @@ import {
   off
 } from "firebase/database";
 import { db } from "@/lib/firebase";
-import { Ambulance, EmergencyCase } from "@/models/types";
+import { Ambulance } from "@/models/types";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { calculateDistance } from "@/utils/distance";
 
-const NEARBY_THRESHOLD = 10;
+const NEARBY_THRESHOLD = 5;
 
 const PoliceDashboard: React.FC = () => {
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
-  const [emergencyCases, setEmergencyCases] = useState<EmergencyCase[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   
   const policeLocation = useGeolocation({ enableHighAccuracy: true }, 10000);
-
-  // Fetch emergency cases to check case status
-  useEffect(() => {
-    const fetchCases = () => {
-      try {
-        const casesRef = ref(db, "emergencyCases");
-        
-        const unsubscribe = onValue(casesRef, (snapshot) => {
-          const casesData: EmergencyCase[] = [];
-          
-          snapshot.forEach((childSnapshot) => {
-            const data = childSnapshot.val();
-            casesData.push({
-              id: childSnapshot.key || data.id || "",
-              ...data
-            });
-          });
-          
-          setEmergencyCases(casesData);
-        }, (error) => {
-          console.error("Error fetching emergency cases:", error);
-        });
-        
-        return () => {
-          off(casesRef);
-        };
-      } catch (error) {
-        console.error("Error setting up cases listener:", error);
-      }
-    };
-    
-    fetchCases();
-  }, []);
   
   useEffect(() => {
     const fetchAmbulances = () => {
@@ -180,24 +146,6 @@ const PoliceDashboard: React.FC = () => {
     }
   };
 
-  // Filter ambulances to exclude those with cases marked as "arrived"
-  const getFilteredAmbulances = () => {
-    return ambulances.filter(ambulance => {
-      // If ambulance has no assigned case, show it
-      if (!ambulance.details.caseId) {
-        return true;
-      }
-
-      // Find the associated case
-      const associatedCase = emergencyCases.find(
-        case_ => case_.id === ambulance.details.caseId
-      );
-
-      // If case not found or case status is not "arrived", show the ambulance
-      return !associatedCase || associatedCase.status !== "arrived";
-    });
-  };
-
   return (
     <DashboardLayout title="Police Dashboard" role="police">
       <div className="space-y-6">
@@ -205,7 +153,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {getFilteredAmbulances().filter(a => a.details.status === "en-route").length}
+                {ambulances.filter(a => a.details.status === "en-route").length}
               </CardTitle>
               <CardDescription>Active Ambulances</CardDescription>
             </CardHeader>
@@ -217,7 +165,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {getFilteredAmbulances().filter(a => a.details.isNearby).length}
+                {ambulances.filter(a => a.details.isNearby).length}
               </CardTitle>
               <CardDescription>Nearby Ambulances</CardDescription>
             </CardHeader>
@@ -229,7 +177,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {getFilteredAmbulances().filter(a => a.details.severity === "critical").length}
+                {ambulances.filter(a => a.details.severity === "critical").length}
               </CardTitle>
               <CardDescription>Critical Cases</CardDescription>
             </CardHeader>
@@ -241,7 +189,7 @@ const PoliceDashboard: React.FC = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-bold">
-                {getFilteredAmbulances().filter(a => a.details.status === "idle").length}
+                {ambulances.filter(a => a.details.status === "idle").length}
               </CardTitle>
               <CardDescription>Available Units</CardDescription>
             </CardHeader>
@@ -293,7 +241,7 @@ const PoliceDashboard: React.FC = () => {
                   <p>Loading ambulance data...</p>
                 </CardContent>
               </Card>
-            ) : getFilteredAmbulances().filter(a => a.details.isNearby).length > 0 && (
+            ) : ambulances.filter(a => a.details.isNearby).length > 0 && (
               <Card className="border-t-4 border-t-emergency-police">
                 <CardHeader className="bg-blue-50 text-blue-800">
                   <div className="flex items-start gap-2">
@@ -302,7 +250,7 @@ const PoliceDashboard: React.FC = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  {getFilteredAmbulances().filter(a => a.details.isNearby).map(ambulance => (
+                  {ambulances.filter(a => a.details.isNearby).map(ambulance => (
                     <div key={ambulance.id} className="space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -356,8 +304,8 @@ const PoliceDashboard: React.FC = () => {
                   <p>Loading ambulance data...</p>
                 </CardContent>
               </Card>
-            ) : getFilteredAmbulances().length > 0 ? (
-              getFilteredAmbulances().filter(a => a.details.isNearby).map(ambulance => (
+            ) : ambulances.length > 0 ? (
+              ambulances.filter(a => a.details.isNearby).map(ambulance => (
                 <Card key={ambulance.id} className={`border-l-4 ${ambulance.details.isNearby ? "border-l-blue-500" : ""}`}>
                   <CardHeader>
                     <div className="flex flex-wrap justify-between items-start gap-2">
