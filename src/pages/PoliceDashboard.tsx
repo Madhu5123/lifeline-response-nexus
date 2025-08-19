@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { calculateDistance } from "@/utils/distance";
 
-const NEARBY_THRESHOLD = 5;
+const NEARBY_THRESHOLD = 10; // Changed to 10 km as requested
 
 const PoliceDashboard: React.FC = () => {
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
@@ -42,53 +42,59 @@ const PoliceDashboard: React.FC = () => {
             if (data.location && data.location.latitude && data.location.longitude) {
               let isNearby = false;
               
-              if (policeLocation.latitude && policeLocation.longitude) {
-                const distance = calculateDistance(
-                  policeLocation.latitude,
-                  policeLocation.longitude,
-                  data.location.latitude,
-                  data.location.longitude
-                );
-                isNearby = distance <= NEARBY_THRESHOLD;
-              } else {
-                isNearby = Math.random() > 0.7;
+              // Only show ambulances that are en-route (not arrived yet)
+              if (data.status !== "arrived") {
+                if (policeLocation.latitude && policeLocation.longitude) {
+                  const distance = calculateDistance(
+                    policeLocation.latitude,
+                    policeLocation.longitude,
+                    data.location.latitude,
+                    data.location.longitude
+                  );
+                  isNearby = distance <= NEARBY_THRESHOLD;
+                } else {
+                  isNearby = Math.random() > 0.7;
+                }
               }
               
               const lastUpdated = data.lastUpdated ? 
                 (typeof data.lastUpdated === 'string' ? new Date(data.lastUpdated) : new Date(data.lastUpdated)) : 
                 new Date();
               
-              // Create a properly typed Ambulance object
-              ambulancesData.push({
-                id: childSnapshot.key || data.id || "",
-                name: data.name || "",
-                email: data.email || "",
-                role: "ambulance",
-                status: "approved",
-                details: {
-                  vehicleId: data.vehicleId || "",
-                  vehicleType: data.vehicleType || "Standard Ambulance",
-                  capacity: data.capacity || 2,
-                  equipment: data.equipment || [],
-                  status: data.status || "available",
-                  driverName: data.driverName,
-                  vehicleNumber: data.vehicleNumber,
-                  severity: data.severity,
-                  location: data.location,
-                  destination: data.destination,
-                  caseId: data.caseId,
-                  isNearby: isNearby,
-                  lastUpdated: lastUpdated,
-                  distance: policeLocation.latitude && policeLocation.longitude ? 
-                    calculateDistance(
-                      policeLocation.latitude,
-                      policeLocation.longitude,
-                      data.location.latitude,
-                      data.location.longitude
-                    ).toFixed(1) + " km" : 
-                    "Unknown",
-                }
-              });
+              // Only add ambulances that are not "arrived" to the list
+              if (data.status !== "arrived") {
+                // Create a properly typed Ambulance object
+                ambulancesData.push({
+                  id: childSnapshot.key || data.id || "",
+                  name: data.name || "",
+                  email: data.email || "",
+                  role: "ambulance",
+                  status: "approved",
+                  details: {
+                    vehicleId: data.vehicleId || "",
+                    vehicleType: data.vehicleType || "Standard Ambulance",
+                    capacity: data.capacity || 2,
+                    equipment: data.equipment || [],
+                    status: data.status || "available",
+                    driverName: data.driverName,
+                    vehicleNumber: data.vehicleNumber,
+                    severity: data.severity,
+                    location: data.location,
+                    destination: data.destination,
+                    caseId: data.caseId,
+                    isNearby: isNearby,
+                    lastUpdated: lastUpdated,
+                    distance: policeLocation.latitude && policeLocation.longitude ? 
+                      calculateDistance(
+                        policeLocation.latitude,
+                        policeLocation.longitude,
+                        data.location.latitude,
+                        data.location.longitude
+                      ).toFixed(1) + " km" : 
+                      "Unknown",
+                  }
+                });
+              }
             }
           });
           

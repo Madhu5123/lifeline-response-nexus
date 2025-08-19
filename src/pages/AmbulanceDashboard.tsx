@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useFirebaseDatabase } from "@/hooks/use-firebase-database";
+import { useRealTimeLocationTracking } from "@/hooks/use-real-time-location-tracking";
 import { 
   ref,
   onValue,
@@ -64,7 +65,13 @@ const AmbulanceDashboard: React.FC = () => {
     maximumAge: 300000 
   }, 10000);
   
-  const { updateLocation, startLocationTracking: dbStartLocationTracking } = useFirebaseDatabase({
+  // Real-time location tracking hook
+  const { startTracking: startLocationTracking, stopTracking: stopLocationTracking } = useRealTimeLocationTracking({
+    userId: user?.id || '',
+    isTracking: isTrackingLocation
+  });
+
+  const { updateLocation } = useFirebaseDatabase({
     path: 'ambulances'
   });
 
@@ -336,8 +343,11 @@ const AmbulanceDashboard: React.FC = () => {
               
               setAmbulanceStatus(caseData.status === "en-route" ? "en-route" : "busy");
               
-              if (caseData.status !== "en-route" && isTrackingLocation) {
-                stopLocationTracking();
+              // Start location tracking when en-route, stop when not
+              if (caseData.status === "en-route" && !isTrackingLocation) {
+                setIsTrackingLocation(true);
+              } else if (caseData.status !== "en-route" && isTrackingLocation) {
+                setIsTrackingLocation(false);
               }
             }
           });
@@ -355,7 +365,7 @@ const AmbulanceDashboard: React.FC = () => {
             });
             
             if (isTrackingLocation) {
-              stopLocationTracking();
+              setIsTrackingLocation(false);
             }
           }
         }, (error) => {
@@ -386,8 +396,12 @@ const AmbulanceDashboard: React.FC = () => {
       if (locationTrackingRef.current) {
         locationTrackingRef.current();
       }
+      // Stop location tracking on unmount
+      if (isTrackingLocation) {
+        setIsTrackingLocation(false);
+      }
     };
-  }, []);
+  }, [isTrackingLocation]);
   
   const handleAcceptCase = async (emergencyCase: EmergencyCase) => {
     if (!user) {
@@ -501,43 +515,6 @@ const AmbulanceDashboard: React.FC = () => {
     window.open(route.googleMapsUrl, '_blank');
   };
   
-  const startLocationTracking = () => {
-    if (!user) return;
-    
-    stopLocationTracking();
-    
-    const getCurrentLocation = async () => {
-      if (!isLocationAvailable()) {
-        throw new Error("Location not available");
-      }
-      return {
-        latitude: location.latitude!,
-        longitude: location.longitude!
-      };
-    };
-    
-    locationTrackingRef.current = dbStartLocationTracking(
-      user.id, 
-      getCurrentLocation,
-      120000
-    );
-    
-    setIsTrackingLocation(true);
-    
-    toast({
-      title: "Location Tracking Started",
-      description: "Your location will be updated every 2 minutes",
-    });
-  };
-  
-  const stopLocationTracking = () => {
-    if (locationTrackingRef.current) {
-      locationTrackingRef.current();
-      locationTrackingRef.current = null;
-    }
-    setIsTrackingLocation(false);
-  };
-  
   const handleStartRoute = async (emergencyCase: EmergencyCase) => {
     if (!user) return;
     
@@ -577,7 +554,8 @@ const AmbulanceDashboard: React.FC = () => {
       
       setAmbulanceStatus("en-route");
       
-      startLocationTracking();
+      // Start location tracking
+      setIsTrackingLocation(true);
       
       toast({
         title: "En Route",
@@ -609,8 +587,7 @@ const AmbulanceDashboard: React.FC = () => {
         status: "arrived",
         lastUpdated: new Date().toISOString()
       });
-      
-      stopLocationTracking();
+      setIsTrackingLocation(false);
       
       toast({
         title: "Marked as Arrived",
@@ -649,7 +626,7 @@ const AmbulanceDashboard: React.FC = () => {
       setAmbulanceStatus("available");
       
       if (isTrackingLocation) {
-        stopLocationTracking();
+        setIsTrackingLocation(false);
       }
       
       toast({
@@ -689,7 +666,7 @@ const AmbulanceDashboard: React.FC = () => {
       setAmbulanceStatus("available");
       
       if (isTrackingLocation) {
-        stopLocationTracking();
+        setIsTrackingLocation(false);
       }
       
       toast({
