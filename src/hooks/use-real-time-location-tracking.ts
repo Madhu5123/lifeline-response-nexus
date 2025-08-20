@@ -7,12 +7,28 @@ interface LocationTrackingOptions {
   userId: string;
   isTracking: boolean;
   intervalMs?: number;
+  ambulanceDetails?: {
+    name: string;
+    email: string;
+    driverName: string;
+    vehicleNumber: string;
+    vehicleType: string;
+    capacity: number;
+    status: string;
+    severity?: string;
+    caseId?: string;
+    destination?: {
+      name: string;
+      eta: string;
+    };
+  };
 }
 
 export const useRealTimeLocationTracking = ({
   userId,
   isTracking,
   intervalMs = 10000, // 10 seconds
+  ambulanceDetails
 }: LocationTrackingOptions) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const location = useGeolocation({ 
@@ -39,7 +55,7 @@ export const useRealTimeLocationTracking = ({
       const resolvedAddress = data.display_name || "Unknown Location";
 
       const ambulanceRef = ref(db, `ambulances/${userId}`);
-      await update(ambulanceRef, {
+      const updateData: any = {
         location: {
           latitude: location.latitude,
           longitude: location.longitude,
@@ -47,7 +63,23 @@ export const useRealTimeLocationTracking = ({
           address: resolvedAddress
         },
         lastUpdated: new Date().toISOString()
-      });
+      };
+
+      // Include ambulance details if provided
+      if (ambulanceDetails) {
+        updateData.name = ambulanceDetails.name;
+        updateData.email = ambulanceDetails.email;
+        updateData.driverName = ambulanceDetails.driverName;
+        updateData.vehicleNumber = ambulanceDetails.vehicleNumber;
+        updateData.vehicleType = ambulanceDetails.vehicleType;
+        updateData.capacity = ambulanceDetails.capacity;
+        updateData.status = ambulanceDetails.status;
+        if (ambulanceDetails.severity) updateData.severity = ambulanceDetails.severity;
+        if (ambulanceDetails.caseId) updateData.caseId = ambulanceDetails.caseId;
+        if (ambulanceDetails.destination) updateData.destination = ambulanceDetails.destination;
+      }
+
+      await update(ambulanceRef, updateData);
 
       console.log(`Location updated for ambulance ${userId}:`, {
         lat: location.latitude,
@@ -57,23 +89,39 @@ export const useRealTimeLocationTracking = ({
     } catch (error) {
       console.error("Error updating location:", error);
       
-      // Fallback without address
-      try {
-        const ambulanceRef = ref(db, `ambulances/${userId}`);
-        await update(ambulanceRef, {
-          location: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            lastUpdated: new Date().toISOString(),
-            address: "Location Update"
-          },
-          lastUpdated: new Date().toISOString()
-        });
-      } catch (fallbackError) {
-        console.error("Fallback location update failed:", fallbackError);
-      }
+        // Fallback without address
+        try {
+          const ambulanceRef = ref(db, `ambulances/${userId}`);
+          const fallbackData: any = {
+            location: {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              lastUpdated: new Date().toISOString(),
+              address: "Location Update"
+            },
+            lastUpdated: new Date().toISOString()
+          };
+
+          // Include ambulance details if provided
+          if (ambulanceDetails) {
+            fallbackData.name = ambulanceDetails.name;
+            fallbackData.email = ambulanceDetails.email;
+            fallbackData.driverName = ambulanceDetails.driverName;
+            fallbackData.vehicleNumber = ambulanceDetails.vehicleNumber;
+            fallbackData.vehicleType = ambulanceDetails.vehicleType;
+            fallbackData.capacity = ambulanceDetails.capacity;
+            fallbackData.status = ambulanceDetails.status;
+            if (ambulanceDetails.severity) fallbackData.severity = ambulanceDetails.severity;
+            if (ambulanceDetails.caseId) fallbackData.caseId = ambulanceDetails.caseId;
+            if (ambulanceDetails.destination) fallbackData.destination = ambulanceDetails.destination;
+          }
+
+          await update(ambulanceRef, fallbackData);
+        } catch (fallbackError) {
+          console.error("Fallback location update failed:", fallbackError);
+        }
     }
-  }, [location.latitude, location.longitude, userId]);
+  }, [location.latitude, location.longitude, userId, ambulanceDetails]);
 
   const startTracking = useCallback(() => {
     if (intervalRef.current) {

@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, MapPin, Phone } from "lucide-react";
+import AmbulanceTrackingMap from "@/components/AmbulanceTrackingMap";
 import { 
   ref, 
   onValue, 
@@ -213,33 +214,13 @@ const PoliceDashboard: React.FC = () => {
           </TabsList>
           
           <TabsContent value="map" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Ambulance Tracking Map</CardTitle>
-                <CardDescription>
-                  Real-time locations of emergency vehicles near you
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="aspect-video bg-gray-100 flex items-center justify-center border-t">
-                  <div className="text-center p-8">
-                    <p className="text-gray-500 mb-4">Map visualization would be implemented here</p>
-                    <p className="text-sm text-gray-400">
-                      This would display a Google Maps interface showing ambulance positions and routes
-                    </p>
-                    {policeLocation.latitude && policeLocation.longitude ? (
-                      <p className="text-xs mt-4 text-green-600">
-                        Your position: {policeLocation.latitude.toFixed(6)}, {policeLocation.longitude.toFixed(6)}
-                      </p>
-                    ) : (
-                      <p className="text-xs mt-4 text-orange-500">
-                        Waiting for your location...
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AmbulanceTrackingMap 
+              ambulances={ambulances}
+              policeLocation={policeLocation.latitude && policeLocation.longitude ? {
+                latitude: policeLocation.latitude,
+                longitude: policeLocation.longitude
+              } : undefined}
+            />
             
             {loading ? (
               <Card>

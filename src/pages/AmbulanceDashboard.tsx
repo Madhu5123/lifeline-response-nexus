@@ -68,7 +68,22 @@ const AmbulanceDashboard: React.FC = () => {
   // Real-time location tracking hook
   const { startTracking: startLocationTracking, stopTracking: stopLocationTracking } = useRealTimeLocationTracking({
     userId: user?.id || '',
-    isTracking: isTrackingLocation
+    isTracking: isTrackingLocation,
+    ambulanceDetails: user ? {
+      name: user.name,
+      email: user.email,
+      driverName: user.name,
+      vehicleNumber: user.details?.vehicleNumber || "Unknown",
+      vehicleType: user.details?.vehicleType || "Standard Ambulance",
+      capacity: user.details?.capacity || 2,
+      status: ambulanceStatus,
+      severity: activeCases[0]?.severity,
+      caseId: activeCases[0]?.id,
+      destination: activeCases[0]?.hospital ? {
+        name: activeCases[0].hospital.name,
+        eta: activeCases[0].ambulanceInfo?.estimatedArrival || "Unknown"
+      } : undefined
+    } : undefined
   });
 
   const { updateLocation } = useFirebaseDatabase({
@@ -457,6 +472,12 @@ const AmbulanceDashboard: React.FC = () => {
         status: "busy",
         severity: emergencyCase.severity,
         caseId: emergencyCase.id,
+        name: user.name,
+        email: user.email,
+        driverName: user.name,
+        vehicleNumber: user.details?.vehicleNumber || "Unknown",
+        vehicleType: user.details?.vehicleType || "Standard Ambulance",
+        capacity: user.details?.capacity || 2,
         destination: {
           name: emergencyCase.hospital?.name || "Location",
           eta: eta
@@ -549,6 +570,18 @@ const AmbulanceDashboard: React.FC = () => {
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
       await update(ambulanceRef, {
         status: "en-route",
+        severity: emergencyCase.severity,
+        caseId: emergencyCase.id,
+        name: user.name,
+        email: user.email,
+        driverName: user.name,
+        vehicleNumber: user.details?.vehicleNumber || "Unknown",
+        vehicleType: user.details?.vehicleType || "Standard Ambulance",
+        capacity: user.details?.capacity || 2,
+        destination: {
+          name: emergencyCase.hospital?.name || "Hospital",
+          eta: eta
+        },
         lastUpdated: new Date().toISOString()
       });
       
