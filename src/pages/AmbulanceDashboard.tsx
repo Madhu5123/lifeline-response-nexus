@@ -8,6 +8,7 @@ import { Check, MapPin, Phone, Calendar, Plus, Navigation, RefreshCw, AlertTrian
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { useGeolocation } from "@/hooks/use-geolocation";
+import { useLocation } from "@/hooks/use-location";
 import { useFirebaseDatabase } from "@/hooks/use-firebase-database";
 import { useRealTimeLocationTracking } from "@/hooks/use-real-time-location-tracking";
 import { 
@@ -64,6 +65,9 @@ const AmbulanceDashboard: React.FC = () => {
     timeout: 30000, 
     maximumAge: 300000 
   }, 10000);
+  
+  // Google Maps location hook for more accurate location
+  const googleMapsLocation = useLocation();
   
   // Real-time location tracking hook
   const { startTracking: startLocationTracking, stopTracking: stopLocationTracking } = useRealTimeLocationTracking({
@@ -731,11 +735,30 @@ const AmbulanceDashboard: React.FC = () => {
     }));
   };
   
-  const handleLocationToggle = () => {
+  const handleLocationToggle = async () => {
+    const newUseCurrentLocation = !newCase.useCurrentLocation;
     setNewCase(prev => ({
       ...prev,
-      useCurrentLocation: !prev.useCurrentLocation
+      useCurrentLocation: newUseCurrentLocation
     }));
+    
+    // If enabling current location, fetch it immediately using Google Maps API
+    if (newUseCurrentLocation && googleMapsLocation.isGoogleMapsReady) {
+      try {
+        await googleMapsLocation.useCurrentLocation();
+        toast({
+          title: "Location Updated",
+          description: "Using your current location with Google Maps accuracy",
+        });
+      } catch (error) {
+        console.error("Error getting current location:", error);
+        toast({
+          title: "Location Error",
+          description: "Could not get current location. Please try again or enter address manually.",
+          variant: "destructive",
+        });
+      }
+    }
   };
   
   const handleCreateCase = async () => {
@@ -775,9 +798,50 @@ const AmbulanceDashboard: React.FC = () => {
       const newCaseRef = push(casesRef);
       
 
-      const locationData = useCurrentLocation
-      ? await fetchAndResolveAddress(location.latitude!, location.longitude!)
-      : { address: address, latitude: 0, longitude: 0 };
+      let locationData;
+      
+      if (useCurrentLocation) {
+        // Use Google Maps API for accurate location
+        if (googleMapsLocation.latitude && googleMapsLocation.longitude) {
+          locationData = {
+            latitude: googleMapsLocation.latitude,
+            longitude: googleMapsLocation.longitude,
+            address: googleMapsLocation.address || "Current Location"
+          };
+        } else {
+          // Fallback to basic geolocation if Google Maps not available
+          if (!isLocationAvailable()) {
+            toast({
+              title: "Location Error",
+              description: "Unable to get your current location. Please try again or enter address manually.",
+              variant: "destructive",
+            });
+            return;
+          }
+          locationData = await fetchAndResolveAddress(location.latitude!, location.longitude!);
+        }
+      } else {
+        // For manual address, try to geocode using Google Maps API
+        if (googleMapsLocation.isGoogleMapsReady && address) {
+          try {
+            await googleMapsLocation.setAddress(address);
+            if (googleMapsLocation.latitude && googleMapsLocation.longitude) {
+              locationData = {
+                latitude: googleMapsLocation.latitude,
+                longitude: googleMapsLocation.longitude,
+                address: googleMapsLocation.address || address
+              };
+            } else {
+              locationData = { address: address, latitude: 0, longitude: 0 };
+            }
+          } catch (error) {
+            console.error("Error geocoding address:", error);
+            locationData = { address: address, latitude: 0, longitude: 0 };
+          }
+        } else {
+          locationData = { address: address, latitude: 0, longitude: 0 };
+        }
+      }
 
 
       const caseData = {
@@ -1038,7 +1102,16 @@ const AmbulanceDashboard: React.FC = () => {
                   {newCase.useCurrentLocation && (
                     <div className="text-sm text-blue-600 flex items-center">
                       <MapPin className="h-4 w-4 mr-1" />
-                      {isLocationAvailable() ? "Using your current location" : "Waiting for location..."}
+                      {googleMapsLocation.isLoading && "Getting accurate location with Google Maps..."}
+                      {!googleMapsLocation.isLoading && googleMapsLocation.latitude && googleMapsLocation.longitude && 
+                        `Using accurate location: ${googleMapsLocation.address || "Current Location"}`}
+                      {!googleMapsLocation.isLoading && !googleMapsLocation.latitude && !googleMapsLocation.longitude && 
+                        (isLocationAvailable() ? "Using your current location" : "Waiting for location...")}
+                      {googleMapsLocation.error && (
+                        <span className="text-red-600 ml-2">
+                          Error: {googleMapsLocation.error}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
