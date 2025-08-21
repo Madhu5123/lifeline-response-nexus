@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const HospitalDashboard: React.FC = () => {
   
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // Fetch pending cases that need a hospital
   useEffect(() => {
@@ -383,19 +385,18 @@ const calculateDistance = (
     }
   };
   
-  // Open Google Maps for directions
-  const openGoogleMaps = (emergencyCase: EmergencyCase) => {
-    if (!emergencyCase.ambulanceInfo || !ambulanceLocations[emergencyCase.ambulanceId || '']) {
+  // Navigate to ambulance tracking page
+  const openAmbulanceTracker = (emergencyCase: EmergencyCase) => {
+    if (!emergencyCase.ambulanceId) {
       toast({
-        title: "Location unavailable",
-        description: "Ambulance location is not available",
+        title: "Ambulance not assigned",
+        description: "No ambulance has been assigned to this case yet",
         variant: "destructive", 
       });
       return;
     }
     
-    const ambulanceLoc = ambulanceLocations[emergencyCase.ambulanceId || ''];
-    window.open(`https://www.google.com/maps/search/?api=1&query=${ambulanceLoc.latitude},${ambulanceLoc.longitude}`, '_blank');
+    navigate(`/hospital/track/${emergencyCase.id}`);
   };
   
   // Calculate time since last location update
@@ -730,8 +731,8 @@ const calculateDistance = (
                       )}
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-3 border-t p-4 bg-gray-50 dark:bg-gray-900">
-                      {emergency.status === "en-route" && ambulanceLocations[emergency.ambulanceId || ''] && (
-                        <Button variant="outline" className="rounded-full" onClick={() => openGoogleMaps(emergency)}>
+                      {emergency.status === "en-route" && emergency.ambulanceId && (
+                        <Button variant="outline" className="rounded-full" onClick={() => openAmbulanceTracker(emergency)}>
                           Track Ambulance
                         </Button>
                       )}

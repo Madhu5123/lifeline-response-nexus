@@ -17,6 +17,7 @@ import Register from "./pages/Register";
 import AdminDashboard from "./pages/AdminDashboard";
 import AmbulanceDashboard from "./pages/AmbulanceDashboard";
 import HospitalDashboard from "./pages/HospitalDashboard";
+import HospitalAmbulanceTracker from "./pages/HospitalAmbulanceTracker";
 import PoliceDashboard from "./pages/PoliceDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -185,6 +186,15 @@ const App = () => {
                     element={
                       <ProtectedRoute allowedRoles={["hospital"]}>
                         <HospitalDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/hospital/track/:caseId" 
+                    element={
+                      <ProtectedRoute allowedRoles={["hospital"]}>
+                        <HospitalAmbulanceTracker />
                       </ProtectedRoute>
                     } 
                   />
