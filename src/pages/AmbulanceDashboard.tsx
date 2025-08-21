@@ -176,55 +176,17 @@ const AmbulanceDashboard: React.FC = () => {
     
     try {
       const ambulanceRef = ref(db, `ambulances/${user.id}`);
-      const fetchAndUpdateAddress = async () => {
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}`,
-            {
-              headers: {
-                "Accept-Language": "en",
-                "User-Agent": "ambulance-app/1.0 (lifelineasai@gmail.com)"
-              },
-            }
-          );
-          const data = await res.json();
-          const resolvedAddress = data.display_name || "Unknown Location";
       
-          update(ambulanceRef, {
-            location: {
-              latitude: location.latitude,
-              longitude: location.longitude,
-              lastUpdated: new Date().toISOString(),
-              address: resolvedAddress
-            },
-            lastUpdated: new Date().toISOString()
-          });
-        } catch (error) {
-          console.error("Reverse geocoding failed:", error);
-      
-          // Fallback without address
-          update(ambulanceRef, {
-            location: {
-              latitude: location.latitude,
-              longitude: location.longitude,
-              lastUpdated: new Date().toISOString(),
-              address: "Unknown"
-            },
-            lastUpdated: new Date().toISOString()
-          });
-        }
-      };
-      
-      fetchAndUpdateAddress();      
-      // update(ambulanceRef, {
-      //   location: {
-      //     latitude: location.latitude,
-      //     longitude: location.longitude,
-      //     lastUpdated: new Date().toISOString(),
-      //     address: "Current Location"
-      //   },
-      //   lastUpdated: new Date().toISOString()
-      // });
+      // Update ambulance location with coordinates only
+      update(ambulanceRef, {
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          lastUpdated: new Date().toISOString(),
+          address: "Current Location"
+        },
+        lastUpdated: new Date().toISOString()
+      });
     } catch (error) {
       console.error("Error updating ambulance location:", error);
     }
@@ -851,9 +813,13 @@ const AmbulanceDashboard: React.FC = () => {
         } catch (error) {
           console.error("Google Maps current location failed:", error);
           
-          // Fallback to basic geolocation
+          // Fallback to basic geolocation coordinates only
           if (isLocationAvailable()) {
-            locationData = await fetchAndResolveAddress(location.latitude!, location.longitude!);
+            locationData = {
+              latitude: location.latitude!,
+              longitude: location.longitude!,
+              address: "Current Location"
+            };
             
             toast({
               title: "Location Retrieved", 
@@ -954,35 +920,6 @@ const AmbulanceDashboard: React.FC = () => {
     }
   };
 
-  const fetchAndResolveAddress = async (latitude: number, longitude: number) => {
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-        {
-          headers: {
-            "Accept-Language": "en",
-            "User-Agent": "ambulance-app/1.0 (lifelineasai@gmail.com)",
-          },
-        }
-      );
-  
-      const data = await res.json();
-      const resolvedAddress = data.display_name || "Unknown Location";
-  
-      return {
-        latitude,
-        longitude,
-        address: resolvedAddress,
-      };
-    } catch (error) {
-      console.error("Failed to resolve address:", error);
-      return {
-        latitude,
-        longitude,
-        address: "Unknown",
-      };
-    }
-  };
   
   const getSeverityBadgeClass = (severity: string | undefined) => {
     if (!severity) return "bg-gray-500 text-white";
