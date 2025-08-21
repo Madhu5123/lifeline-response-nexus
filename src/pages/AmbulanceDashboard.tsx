@@ -761,6 +761,28 @@ const AmbulanceDashboard: React.FC = () => {
     }
   };
   
+  // Fallback geocoding function using Google Maps API
+  const geocodeAddressWithFallback = async (address: string) => {
+    if (!window.google || !window.google.maps) {
+      throw new Error("Google Maps API not loaded");
+    }
+    
+    return new Promise<{lat: number, lng: number}>((resolve, reject) => {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address }, (results, status) => {
+        if (status === 'OK' && results && results[0] && results[0].geometry) {
+          const location = results[0].geometry.location;
+          resolve({
+            lat: location.lat(),
+            lng: location.lng()
+          });
+        } else {
+          reject(new Error(`Geocoding failed: ${status}`));
+        }
+      });
+    });
+  };
+
   const handleCreateCase = async () => {
     if (!user) return;
 
@@ -773,9 +795,9 @@ const AmbulanceDashboard: React.FC = () => {
       return;
     }
     
-    if (newCase.useCurrentLocation && !isLocationAvailable()) {
+    if (newCase.useCurrentLocation && !isLocationAvailable() && !googleMapsLocation.latitude) {
       toast({
-        title: "Location required",
+        title: "Location required", 
         description: "Your location is needed to create a case. Please enable location services or enter an address manually.",
         variant: "destructive",
       });
@@ -801,16 +823,43 @@ const AmbulanceDashboard: React.FC = () => {
       let locationData;
       
       if (useCurrentLocation) {
-        // Use Google Maps API for accurate location
-        if (googleMapsLocation.latitude && googleMapsLocation.longitude) {
-          locationData = {
-            latitude: googleMapsLocation.latitude,
-            longitude: googleMapsLocation.longitude,
-            address: googleMapsLocation.address || "Current Location"
-          };
-        } else {
-          // Fallback to basic geolocation if Google Maps not available
-          if (!isLocationAvailable()) {
+        // First try to get accurate current location using Google Maps
+        try {
+          await googleMapsLocation.useCurrentLocation();
+          
+          // Wait for location to be updated
+          let attempts = 0;
+          while ((!googleMapsLocation.latitude || !googleMapsLocation.longitude) && attempts < 10) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+          }
+          
+          if (googleMapsLocation.latitude && googleMapsLocation.longitude) {
+            locationData = {
+              latitude: googleMapsLocation.latitude,
+              longitude: googleMapsLocation.longitude,
+              address: googleMapsLocation.address || "Current Location"
+            };
+            
+            toast({
+              title: "Location Retrieved",
+              description: "Using precise Google Maps location",
+            });
+          } else {
+            throw new Error("Google Maps location failed");
+          }
+        } catch (error) {
+          console.error("Google Maps current location failed:", error);
+          
+          // Fallback to basic geolocation
+          if (isLocationAvailable()) {
+            locationData = await fetchAndResolveAddress(location.latitude!, location.longitude!);
+            
+            toast({
+              title: "Location Retrieved", 
+              description: "Using fallback location service",
+            });
+          } else {
             toast({
               title: "Location Error",
               description: "Unable to get your current location. Please try again or enter address manually.",
@@ -818,28 +867,41 @@ const AmbulanceDashboard: React.FC = () => {
             });
             return;
           }
-          locationData = await fetchAndResolveAddress(location.latitude!, location.longitude!);
         }
       } else {
-        // For manual address, try to geocode using Google Maps API
-        if (googleMapsLocation.isGoogleMapsReady && address) {
-          try {
-            await googleMapsLocation.setAddress(address);
-            if (googleMapsLocation.latitude && googleMapsLocation.longitude) {
-              locationData = {
-                latitude: googleMapsLocation.latitude,
-                longitude: googleMapsLocation.longitude,
-                address: googleMapsLocation.address || address
-              };
-            } else {
-              locationData = { address: address, latitude: 0, longitude: 0 };
-            }
-          } catch (error) {
-            console.error("Error geocoding address:", error);
-            locationData = { address: address, latitude: 0, longitude: 0 };
+        // For manual address, use Google Maps API to geocode
+        try {
+          if (googleMapsLocation.isGoogleMapsReady && address) {
+            // Try Google Maps geocoding first
+            const geocodedLocation = await geocodeAddressWithFallback(address);
+            locationData = {
+              latitude: geocodedLocation.lat,
+              longitude: geocodedLocation.lng,
+              address: address
+            };
+            
+            toast({
+              title: "Address Geocoded",
+              description: "Location coordinates retrieved successfully",
+            });
+          } else {
+            throw new Error("Google Maps not ready");
           }
-        } else {
-          locationData = { address: address, latitude: 0, longitude: 0 };
+        } catch (error) {
+          console.error("Google Maps geocoding failed:", error);
+          
+          // Fallback: Store address without coordinates but show warning
+          locationData = { 
+            address: address, 
+            latitude: 0, 
+            longitude: 0 
+          };
+          
+          toast({
+            title: "Address Saved",
+            description: "Address saved but coordinates could not be determined. This may affect ETA calculations.",
+            variant: "destructive",
+          });
         }
       }
 
