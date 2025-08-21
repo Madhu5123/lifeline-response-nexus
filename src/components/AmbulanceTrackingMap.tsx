@@ -84,12 +84,43 @@ const AmbulanceTrackingMap: React.FC<AmbulanceTrackingMapProps> = ({
       let marker = currentMarkers.get(ambulance.id);
 
       if (!marker) {
-        // Create new marker
-        marker = new window.google.maps.Marker({
+        // Create custom ambulance icon
+        const ambulanceIcon = {
+          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+            <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+              <g transform="translate(4, 6)">
+                <!-- Ambulance body -->
+                <rect x="0" y="8" width="32" height="16" rx="2" fill="#FFFFFF" stroke="#DC2626" stroke-width="2"/>
+                <!-- Front windshield -->
+                <rect x="0" y="8" width="8" height="8" rx="1" fill="#E5E7EB" stroke="#DC2626" stroke-width="1"/>
+                <!-- Back doors -->
+                <rect x="24" y="12" width="8" height="8" rx="1" fill="#F3F4F6" stroke="#DC2626" stroke-width="1"/>
+                <!-- Red cross -->
+                <rect x="12" y="12" width="8" height="2" fill="#DC2626"/>
+                <rect x="15" y="9" width="2" height="8" fill="#DC2626"/>
+                <!-- Emergency lights -->
+                <circle cx="6" cy="6" r="2" fill="#EF4444"/>
+                <circle cx="26" cy="6" r="2" fill="#3B82F6"/>
+                <!-- Wheels -->
+                <circle cx="6" cy="26" r="3" fill="#374151"/>
+                <circle cx="26" cy="26" r="3" fill="#374151"/>
+                <!-- Wheel rims -->
+                <circle cx="6" cy="26" r="1.5" fill="#6B7280"/>
+                <circle cx="26" cy="26" r="1.5" fill="#6B7280"/>
+              </g>
+            </svg>
+          `)}`,
+          scaledSize: new (window.google.maps as any).Size(40, 40),
+          anchor: new (window.google.maps as any).Point(20, 32)
+        };
+
+        // Create new marker with ambulance icon
+        marker = new (window.google.maps as any).Marker({
           position,
           map,
+          icon: ambulanceIcon,
           title: `${ambulance.details.vehicleNumber || 'Unknown'} - ${ambulance.details.driverName || 'Unknown Driver'}`
-        });
+        }) as google.maps.Marker;
 
         // Create info window
         const infoWindow = new (window.google.maps as any).InfoWindow({
