@@ -399,6 +399,58 @@ const calculateDistance = (
     navigate(`/hospital/track/${emergencyCase.id}`);
   };
   
+  // Handle prepare reception - save patient details for reception
+  const handlePrepareReception = async (emergencyCase: EmergencyCase) => {
+    if (!user?.id) {
+      toast({
+        title: "Authentication Error",
+        description: "Please log in to prepare reception",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Create patient record for reception
+      const patientData = {
+        patientName: emergencyCase.patientName,
+        age: emergencyCase.age,
+        gender: emergencyCase.gender,
+        symptoms: emergencyCase.symptoms,
+        severity: emergencyCase.severity,
+        description: emergencyCase.description,
+        ambulanceInfo: emergencyCase.ambulanceInfo,
+        location: emergencyCase.location,
+        hospitalId: user.id,
+        hospitalName: user.details?.organization || "Hospital",
+        preparedAt: new Date().toISOString(),
+        status: "prepared",
+        estimatedArrival: emergencyCase.ambulanceInfo?.estimatedArrival || "Unknown",
+        caseId: emergencyCase.id
+      };
+
+      // Save to patients collection
+      const patientsRef = ref(db, "patients");
+      const newPatientRef = push(patientsRef);
+      await set(newPatientRef, patientData);
+
+      toast({
+        title: "Reception Prepared",
+        description: `Reception prepared for ${emergencyCase.patientName}. Patient details saved successfully.`,
+      });
+
+      // Navigate to patients page
+      navigate("/hospital/patients");
+    } catch (error) {
+      console.error("Error preparing reception:", error);
+      toast({
+        title: "Error",
+        description: "Failed to prepare reception. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
   // Calculate time since last location update
   const getTimeSinceUpdate = (lastUpdated: string) => {
     const lastUpdate = new Date(lastUpdated);
@@ -736,7 +788,7 @@ const calculateDistance = (
                           Track Ambulance
                         </Button>
                       )}
-                      <Button className="rounded-full">
+                      <Button className="rounded-full" onClick={() => handlePrepareReception(emergency)}>
                         Prepare Reception
                       </Button>
                     </CardFooter>
