@@ -785,50 +785,55 @@ const AmbulanceDashboard: React.FC = () => {
       let locationData;
       
       if (useCurrentLocation) {
-        // First try to get accurate current location using Google Maps
-        try {
-          await googleMapsLocation.useCurrentLocation();
+        // Use existing location if available, otherwise try to get it quickly
+        if (isLocationAvailable()) {
+          locationData = {
+            latitude: location.latitude!,
+            longitude: location.longitude!,
+            address: "Current Location"
+          };
           
-          // Wait for location to be updated
-          let attempts = 0;
-          while ((!googleMapsLocation.latitude || !googleMapsLocation.longitude) && attempts < 10) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            attempts++;
-          }
-          
-          if (googleMapsLocation.latitude && googleMapsLocation.longitude) {
-            locationData = {
-              latitude: googleMapsLocation.latitude,
-              longitude: googleMapsLocation.longitude,
-              address: googleMapsLocation.address || "Current Location"
-            };
-            
-            toast({
-              title: "Location Retrieved",
-              description: "Using precise Google Maps location",
+          toast({
+            title: "Location Retrieved",
+            description: "Using your current location",
+          });
+        } else {
+          // Quick attempt to get current location with short timeout
+          try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+              const timeoutId = setTimeout(() => reject(new Error("Location timeout")), 3000);
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  clearTimeout(timeoutId);
+                  resolve(pos);
+                },
+                (err) => {
+                  clearTimeout(timeoutId);
+                  reject(err);
+                },
+                { 
+                  enableHighAccuracy: false, 
+                  timeout: 3000, 
+                  maximumAge: 300000 // 5 minutes cache
+                }
+              );
             });
-          } else {
-            throw new Error("Google Maps location failed");
-          }
-        } catch (error) {
-          console.error("Google Maps current location failed:", error);
-          
-          // Fallback to basic geolocation coordinates only
-          if (isLocationAvailable()) {
+            
             locationData = {
-              latitude: location.latitude!,
-              longitude: location.longitude!,
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
               address: "Current Location"
             };
             
             toast({
-              title: "Location Retrieved", 
-              description: "Using fallback location service",
+              title: "Location Retrieved",
+              description: "Using your current location",
             });
-          } else {
+          } catch (error) {
+            console.error("Quick location failed:", error);
             toast({
               title: "Location Error",
-              description: "Unable to get your current location. Please try again or enter address manually.",
+              description: "Unable to get your current location. Please enable location services or enter address manually.",
               variant: "destructive",
             });
             return;
