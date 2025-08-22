@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, Calendar as CalendarIcon, Filter, User, Clock, MapPin, Ambulance, UserCheck } from "lucide-react";
+import { Search, Calendar as CalendarIcon, Filter, User, Clock, MapPin, Ambulance } from "lucide-react";
 import { useAuth } from "@/contexts/RealtimeAuthContext";
 import { format, parseISO, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -17,8 +17,7 @@ import {
   off,
   query,
   orderByChild,
-  equalTo,
-  update
+  equalTo
 } from "firebase/database";
 import { db } from "@/lib/firebase";
 
@@ -147,26 +146,12 @@ const Patients: React.FC = () => {
         return "bg-blue-500 hover:bg-blue-600";
       case "arrived":
         return "bg-green-500 hover:bg-green-600";
-      case "admitted":
-        return "bg-emerald-500 hover:bg-emerald-600";
       case "in-treatment":
         return "bg-purple-500 hover:bg-purple-600";
       case "discharged":
         return "bg-gray-500 hover:bg-gray-600";
       default:
         return "bg-gray-400 hover:bg-gray-500";
-    }
-  };
-
-  const handleAdmitPatient = async (patientId: string) => {
-    try {
-      const patientRef = ref(db, `patients/${patientId}`);
-      await update(patientRef, {
-        status: "admitted",
-        admittedAt: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error("Error admitting patient:", error);
     }
   };
 
@@ -208,7 +193,6 @@ const Patients: React.FC = () => {
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="prepared">Prepared</SelectItem>
                   <SelectItem value="arrived">Arrived</SelectItem>
-                  <SelectItem value="admitted">Admitted</SelectItem>
                   <SelectItem value="in-treatment">In Treatment</SelectItem>
                   <SelectItem value="discharged">Discharged</SelectItem>
                 </SelectContent>
@@ -385,20 +369,6 @@ const Patients: React.FC = () => {
                           )}
                         </div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 pt-4 border-t">
-                    {patient.status !== "admitted" && patient.status !== "discharged" && (
-                      <Button
-                        onClick={() => handleAdmitPatient(patient.id)}
-                        className="flex items-center gap-2"
-                        variant="default"
-                      >
-                        <UserCheck className="h-4 w-4" />
-                        Admit Patient
-                      </Button>
                     )}
                   </div>
                 </CardContent>
