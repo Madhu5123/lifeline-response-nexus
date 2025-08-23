@@ -146,6 +146,8 @@ const Patients: React.FC = () => {
         return "bg-blue-500 hover:bg-blue-600";
       case "arrived":
         return "bg-green-500 hover:bg-green-600";
+      case "admitted":
+        return "bg-emerald-500 hover:bg-emerald-600";
       case "in-treatment":
         return "bg-purple-500 hover:bg-purple-600";
       case "discharged":
@@ -193,6 +195,7 @@ const Patients: React.FC = () => {
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="prepared">Prepared</SelectItem>
                   <SelectItem value="arrived">Arrived</SelectItem>
+                  <SelectItem value="admitted">Admitted</SelectItem>
                   <SelectItem value="in-treatment">In Treatment</SelectItem>
                   <SelectItem value="discharged">Discharged</SelectItem>
                 </SelectContent>

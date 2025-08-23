@@ -226,7 +226,7 @@ const HospitalDashboard: React.FC = () => {
           const cases: EmergencyCase[] = [];
           snapshot.forEach((childSnapshot) => {
             const data = childSnapshot.val();
-            if (data.status === "completed") {
+            if (data.status === "completed" || data.status === "admitted") {
               cases.push({
                 id: childSnapshot.key || "",
                 ...data,
@@ -450,6 +450,65 @@ const calculateDistance = (
       });
     }
   };
+
+  // Handle admitting patient - for arrived cases
+  const handleAdmitPatient = async (emergencyCase: EmergencyCase) => {
+    if (!user?.id) {
+      toast({
+        title: "Authentication Error",
+        description: "Please log in to admit patient",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Update case status to admitted
+      const caseRef = ref(db, `emergencyCases/${emergencyCase.id}`);
+      await update(caseRef, {
+        status: "admitted",
+        admittedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Create patient record with admitted status
+      const patientData = {
+        patientName: emergencyCase.patientName,
+        age: emergencyCase.age,
+        gender: emergencyCase.gender,
+        symptoms: emergencyCase.symptoms,
+        severity: emergencyCase.severity,
+        description: emergencyCase.description,
+        ambulanceInfo: emergencyCase.ambulanceInfo,
+        location: emergencyCase.location,
+        hospitalId: user.id,
+        hospitalName: user.details?.organization || "Hospital",
+        preparedAt: new Date().toISOString(),
+        status: "admitted",
+        caseId: emergencyCase.id
+      };
+
+      // Save to patients collection
+      const patientsRef = ref(db, "patients");
+      const newPatientRef = push(patientsRef);
+      await set(newPatientRef, patientData);
+
+      toast({
+        title: "Patient Admitted",
+        description: `${emergencyCase.patientName} has been admitted successfully.`,
+      });
+
+      // Navigate to patients page
+      navigate("/hospital/patients");
+    } catch (error) {
+      console.error("Error admitting patient:", error);
+      toast({
+        title: "Error",
+        description: "Failed to admit patient. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
   
   // Calculate time since last location update
   const getTimeSinceUpdate = (lastUpdated: string) => {
@@ -482,6 +541,7 @@ const calculateDistance = (
       case "accepted": return "bg-blue-500 text-white";
       case "en-route": return "bg-purple-500 text-white";
       case "arrived": return "bg-green-500 text-white";
+      case "admitted": return "bg-emerald-500 text-white";
       case "completed": return "bg-gray-500 text-white";
       default: return "bg-gray-500 text-white";
     }
@@ -788,9 +848,15 @@ const calculateDistance = (
                           Track Ambulance
                         </Button>
                       )}
-                      <Button className="rounded-full" onClick={() => handlePrepareReception(emergency)}>
-                        Prepare Reception
-                      </Button>
+                      {emergency.status === "arrived" ? (
+                        <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAdmitPatient(emergency)}>
+                          Admitted
+                        </Button>
+                      ) : (
+                        <Button className="rounded-full" onClick={() => handlePrepareReception(emergency)}>
+                          Prepare Reception
+                        </Button>
+                      )}
                     </CardFooter>
                   </Card>
                 ))}
@@ -835,8 +901,8 @@ const calculateDistance = (
                           <Badge className={getSeverityBadgeClass(emergency.severity)}>
                             {emergency.severity.charAt(0).toUpperCase() + emergency.severity.slice(1)}
                           </Badge>
-                          <Badge className="bg-gray-500 text-white">
-                            Completed
+                          <Badge className={getStatusBadgeClass(emergency.status)}>
+                            {emergency.status === "admitted" ? "Admitted" : "Completed"}
                           </Badge>
                         </div>
                       </div>

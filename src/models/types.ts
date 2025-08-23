@@ -27,7 +27,7 @@ export interface User {
 }
 
 // Emergency case types
-export type CaseStatus = "pending" | "accepted" | "completed" | "canceled" | "en-route" | "arrived";
+export type CaseStatus = "pending" | "accepted" | "completed" | "canceled" | "en-route" | "arrived" | "admitted";
 export type CasePriority = "low" | "medium" | "high" | "critical";
 export type CaseType = "accident" | "fire" | "medical" | "crime" | "other";
 
